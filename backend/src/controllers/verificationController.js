@@ -4,181 +4,70 @@ import fs from 'fs/promises';
 import path from 'path';
 
 import { env } from '../config/env.js';
-import User from '../models/User.js';
+import { DOCUMENT_TYPES } from '../middleware/upload.js';
 
-export async function face(req, res) {
-  // Make sure the live image and reference image were uploaded.
-  if (
-    !req.files?.image?.[0] ||
-    !req.files?.reference?.[0]
-  ) {
-    return res.status(400).json({
-      message:
-        'Both live image and consented reference image are required',
-    });
-  }
+const MIME_BY_EXTENSION = Object.fromEntries(Object.entries(DOCUMENT_TYPES).map(([mime, ext]) => [ext, mime]));
+MIME_BY_EXTENSION['.jpeg'] = 'image/jpeg';
 
+async function readStoredFile(filePath, label) {
+  if (!filePath) return null;
   try {
-    // Get the currently logged-in voter.
-    const user = await User.findById(req.user._id);
-
-    if (!user) {
-      return res.status(404).json({
-        message: 'Voter not found',
-      });
-    }
-
-    // A voter must have a stored demo voter document.
-    if (!user.documentReference) {
-      return res.status(400).json({
-        message: 'No voter document is registered for this account',
-      });
-    }
-
-    // Make sure the stored document still exists.
-    try {
-      await fs.access(user.documentReference);
-    } catch {
-      return res.status(400).json({
-        message: 'Registered voter document could not be found',
-      });
-    }
-
-    // Read the stored voter document.
-    const documentBuffer = await fs.readFile(
-      user.documentReference
-    );
-
-    const documentFilename =
-      path.basename(user.documentReference);
-
-    const documentExtension =
-      path.extname(documentFilename).toLowerCase();
-
-    let documentMimeType = 'application/octet-stream';
-
-    if (
-      documentExtension === '.jpg' ||
-      documentExtension === '.jpeg'
-    ) {
-      documentMimeType = 'image/jpeg';
-    } else if (documentExtension === '.png') {
-      documentMimeType = 'image/png';
-    } else if (documentExtension === '.webp') {
-      documentMimeType = 'image/webp';
-    } else if (documentExtension === '.bmp') {
-      documentMimeType = 'image/bmp';
-    } else if (documentExtension === '.pdf') {
-      documentMimeType = 'application/pdf';
-    }
-
-    // Create multipart form data for the AI service.
-    const fd = new FormData();
-
-    // Current/live face.
-    fd.append(
-      'image',
-      req.files.image[0].buffer,
-      {
-        filename: req.files.image[0].originalname,
-        contentType: req.files.image[0].mimetype,
-      }
-    );
-
-    // Registered reference face.
-    fd.append(
-      'reference',
-      req.files.reference[0].buffer,
-      {
-        filename: req.files.reference[0].originalname,
-        contentType: req.files.reference[0].mimetype,
-      }
-    );
-
-    // Registered voter document.
-    fd.append(
-      'document',
-      documentBuffer,
-      {
-        filename: documentFilename,
-        contentType: documentMimeType,
-      }
-    );
-
-    // Send face images + voter document to the AI service.
-    const r = await axios.post(
-      `${env.AI_SERVICE_URL}/verify`,
-      fd,
-      {
-        headers: fd.getHeaders(),
-        timeout: 30000,
-      }
-    );
-
-    const faceVerified = r.data.verified === true;
-    const ageEligible = r.data.ageEligible === true;
-
-    // Both conditions are required.
-    const eligible =
-      faceVerified &&
-      ageEligible;
-
-    if (eligible) {
-      const updatedUser =
-        await User.findByIdAndUpdate(
-          req.user._id,
-          {
-            verificationStatus: 'verified',
-            eligibilityStatus: 'eligible',
-          },
-          {
-            new: true,
-          }
-        );
-
-      return res.json({
-        ...r.data,
-        verificationStatus:
-          updatedUser.verificationStatus,
-        eligibilityStatus:
-          updatedUser.eligibilityStatus,
-      });
-    }
-
-    // Face failed OR age check failed.
-    const updatedUser =
-      await User.findByIdAndUpdate(
-        req.user._id,
-        {
-          verificationStatus: faceVerified
-            ? 'verified'
-            : 'rejected',
-
-          eligibilityStatus: 'not_eligible',
-        },
-        {
-          new: true,
-        }
-      );
-
-    return res.json({
-      ...r.data,
-      verificationStatus:
-        updatedUser.verificationStatus,
-      eligibilityStatus:
-        updatedUser.eligibilityStatus,
-    });
-
-  } catch (e) {
-    return res.status(
-      e.response?.status || 503
-    ).json({
-      message:
-        e.response?.data?.detail ||
-        e.response?.data?.message ||
-        'AI service unavailable',
-
-      detail: e.message,
-    });
+    const buffer = await fs.readFile(filePath);
+    const extension = path.extname(filePath).toLowerCase();
+    return { buffer, filename: `${label}${extension}`, contentType: MIME_BY_EXTENSION[extension] || 'application/octet-stream' };
+  } catch {
+    return null;
   }
+}
+
+// Compares a new live photo with the face and document stored at registration.
+// The reference image is always the server-side copy, so a voter cannot
+// substitute a different "reference" photo to pass the match.
+export async function face(req, res) {
+  const live = req.file;
+  if (!live) return res.status(400).json({ message: 'A live face image is required' });
+
+  const user = req.user;
+  if (user.documentStatus === 'approved') {
+    return res.status(409).json({ message: 'Verification is already complete and approved' });
+  }
+
+  const reference = await readStoredFile(user.faceReference, 'reference');
+  const document = await readStoredFile(user.documentReference, 'document');
+  if (!reference || !document) {
+    return res.status(400).json({ message: 'Registered reference face or voter document is missing; please contact the admin' });
+  }
+
+  const fd = new FormData();
+  fd.append('image', live.buffer, { filename: live.originalname || 'live.jpg', contentType: live.mimetype });
+  fd.append('reference', reference.buffer, { filename: reference.filename, contentType: reference.contentType });
+  fd.append('document', document.buffer, { filename: document.filename, contentType: document.contentType });
+
+  let result;
+  try {
+    ({ data: result } = await axios.post(`${env.AI_SERVICE_URL}/verify`, fd, { headers: fd.getHeaders(), timeout: 60000 }));
+  } catch (e) {
+    // 4xx from the AI service are user-fixable (no face, blurry image, unreadable document).
+    const status = e.response?.status;
+    if (status && status < 500) {
+      return res.status(400).json({ message: e.response.data?.detail || 'Verification input rejected' });
+    }
+    return res.status(503).json({ message: 'AI verification service is unavailable' });
+  }
+
+  const faceVerified = result.verified === true;
+  user.verificationStatus = faceVerified ? 'verified' : 'rejected';
+  user.eligibilityStatus = faceVerified && result.ageEligible === true ? 'eligible' : 'not_eligible';
+  await user.save();
+
+  res.json({
+    similarity: result.similarity,
+    threshold: result.threshold,
+    faceVerified,
+    dateOfBirth: result.dateOfBirth,
+    age: result.age,
+    ageEligible: result.ageEligible,
+    liveness: result.liveness,
+    user: user.toSafeJSON(),
+  });
 }

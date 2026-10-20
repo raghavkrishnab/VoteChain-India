@@ -1,266 +1,103 @@
 import os
+import tempfile
 
 import cv2
 import numpy as np
+from fastapi import FastAPI, File, HTTPException, UploadFile
 
-from fastapi import FastAPI, File, UploadFile, HTTPException
-
-from services.face_detection import detect_faces
-from services.face_verification import (
-    embedding_from_image,
-    cosine_similarity,
-)
+from services.document_ocr import DOCUMENT_EXTENSIONS, calculate_age, extract_date_of_birth, extract_document_text
+from services.face_verification import FaceCountError, cosine_similarity, single_face
 from services.liveness import basic_liveness
-from services.document_ocr import (
-    extract_document_text,
-    extract_date_of_birth,
-    calculate_age,
-)
 
+FACE_MATCH_THRESHOLD = float(os.getenv("FACE_MATCH_THRESHOLD", "0.45"))
+MIN_VOTING_AGE = 18
 
-app = FastAPI(
-    title="Voting AI Service",
-    version="1.0.0"
-)
+app = FastAPI(title="Voting AI Service", version="1.1.0")
 
 
 @app.get("/")
 def root():
-    return {
-        "service": "ai-verification",
-        "status": "ok",
-        "prototype": True,
-    }
+    return {"service": "ai-verification", "status": "ok", "prototype": True}
 
 
 @app.get("/health")
 def health():
-    return {
-        "ok": True
-    }
+    return {"ok": True}
 
 
+def _decode(upload: UploadFile, label: str):
+    image = cv2.imdecode(np.frombuffer(upload.file.read(), np.uint8), cv2.IMREAD_COLOR)
+    if image is None:
+        raise HTTPException(status_code=400, detail=f"Invalid {label} image")
+    return image
+
+
+def _face(image, label: str):
+    try:
+        return single_face(image)
+    except FaceCountError as e:
+        problem = "No face detected" if e.count == 0 else "Multiple faces detected"
+        raise HTTPException(status_code=400, detail=f"{problem} in {label} image")
+
+
+def _read_document_text(upload: UploadFile):
+    extension = os.path.splitext(upload.filename or "")[1].lower()
+    if extension not in DOCUMENT_EXTENSIONS:
+        raise HTTPException(status_code=400, detail="Unsupported voter document format")
+    data = upload.file.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="Empty voter document")
+
+    # A unique temp file per request, so concurrent requests never share a path.
+    fd, path = tempfile.mkstemp(suffix=extension)
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(data)
+        return extract_document_text(path)
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=f"Could not read voter document: {e}")
+    finally:
+        os.remove(path)
+
+
+# Plain `def`: FastAPI runs it in a worker thread, so CPU-heavy inference does
+# not block the event loop.
 @app.post("/verify")
-async def verify(
+def verify(
     image: UploadFile = File(...),
     reference: UploadFile = File(...),
     document: UploadFile = File(...),
 ):
-    # ---------------------------------------------------------
-    # READ FACE IMAGES
-    # ---------------------------------------------------------
+    live = _decode(image, "live")
+    ref = _decode(reference, "reference")
 
-    live_data = await image.read()
-    ref_data = await reference.read()
+    live_face = _face(live, "live")
+    ref_face = _face(ref, "reference")
 
-    live = cv2.imdecode(
-        np.frombuffer(live_data, np.uint8),
-        cv2.IMREAD_COLOR,
-    )
-
-    ref = cv2.imdecode(
-        np.frombuffer(ref_data, np.uint8),
-        cv2.IMREAD_COLOR,
-    )
-
-    if live is None:
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid live image",
-        )
-
-    if ref is None:
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid reference image",
-        )
-
-
-    # ---------------------------------------------------------
-    # FACE DETECTION
-    # ---------------------------------------------------------
-
-    live_faces = detect_faces(live)
-    ref_faces = detect_faces(ref)
-
-    if len(live_faces) == 0:
-        raise HTTPException(
-            status_code=400,
-            detail="No face detected in live image",
-        )
-
-    if len(live_faces) > 1:
-        raise HTTPException(
-            status_code=400,
-            detail="Multiple faces detected in live image",
-        )
-
-    if len(ref_faces) == 0:
-        raise HTTPException(
-            status_code=400,
-            detail="No face detected in reference image",
-        )
-
-    if len(ref_faces) > 1:
-        raise HTTPException(
-            status_code=400,
-            detail="Multiple faces detected in reference image",
-        )
-
-
-    # ---------------------------------------------------------
-    # LIVENESS / IMAGE QUALITY
-    # ---------------------------------------------------------
-
-    liveness = basic_liveness(live)
-
+    liveness = basic_liveness(live, live_face.bbox)
     if not liveness["passed"]:
-        raise HTTPException(
-            status_code=400,
-            detail="Image quality/face-size check failed",
-        )
+        raise HTTPException(status_code=400, detail="Live image check failed: " + "; ".join(liveness["reasons"]))
 
+    similarity = cosine_similarity(live_face.normed_embedding, ref_face.normed_embedding)
+    face_verified = similarity >= FACE_MATCH_THRESHOLD
 
-    # ---------------------------------------------------------
-    # FACE VERIFICATION
-    # ---------------------------------------------------------
+    date_of_birth = extract_date_of_birth(_read_document_text(document))
+    age = calculate_age(date_of_birth) if date_of_birth else None
+    age_eligible = age is not None and age >= MIN_VOTING_AGE
 
-    live_embedding = embedding_from_image(live)
-    ref_embedding = embedding_from_image(ref)
-
-    similarity = cosine_similarity(
-        live_embedding,
-        ref_embedding,
-    )
-
-    threshold = 0.45
-
-    face_verified = similarity >= threshold
-
-
-    # ---------------------------------------------------------
-    # SAVE DOCUMENT TEMPORARILY
-    # ---------------------------------------------------------
-
-    document_data = await document.read()
-
-    if not document_data:
-        raise HTTPException(
-            status_code=400,
-            detail="Empty voter document",
-        )
-
-    original_name = document.filename or "document"
-
-    extension = os.path.splitext(
-        original_name
-    )[1].lower()
-
-    allowed_extensions = [
-        ".jpg",
-        ".jpeg",
-        ".png",
-        ".bmp",
-        ".webp",
-        ".pdf",
-    ]
-
-    if extension not in allowed_extensions:
-        raise HTTPException(
-            status_code=400,
-            detail="Unsupported voter document format",
-        )
-
-    temporary_document = (
-        f"_temporary_voter_document{extension}"
-    )
-
-    try:
-        with open(
-            temporary_document,
-            "wb"
-        ) as f:
-            f.write(document_data)
-
-
-        # -----------------------------------------------------
-        # OCR
-        # -----------------------------------------------------
-
-        document_text = extract_document_text(
-            temporary_document
-        )
-
-        date_of_birth = extract_date_of_birth(
-            document_text
-        )
-
-
-        # -----------------------------------------------------
-        # AGE CHECK
-        # -----------------------------------------------------
-
-        age = None
-        age_eligible = False
-
-        if date_of_birth:
-            age = calculate_age(
-                date_of_birth
-            )
-
-            if age is not None:
-                age_eligible = age >= 18
-
-
-        # -----------------------------------------------------
-        # FINAL ELIGIBILITY
-        # -----------------------------------------------------
-
-        eligible = (
-            face_verified
-            and age_eligible
-        )
-
-
-        return {
-            "verified": face_verified,
-            "status": (
-                "verified"
-                if face_verified
-                else "rejected"
-            ),
-
-            "similarity": round(
-                float(similarity),
-                4,
-            ),
-
-            "threshold": threshold,
-
-            "liveness": liveness,
-
-            "dateOfBirth": date_of_birth,
-
-            "age": age,
-
-            "ageEligible": age_eligible,
-
-            "eligible": eligible,
-
-            "documentText": document_text,
-
-            "message": (
-                "Educational demo verification only. "
-                "It does not prove legal identity, "
-                "citizenship, or real-world voter eligibility."
-            ),
-        }
-
-    finally:
-        # Always delete the temporary document.
-        if os.path.exists(
-            temporary_document
-        ):
-            os.remove(
-                temporary_document
-            )
+    # The OCR text itself is deliberately not returned: it is personal data.
+    return {
+        "verified": face_verified,
+        "status": "verified" if face_verified else "rejected",
+        "similarity": round(similarity, 4),
+        "threshold": FACE_MATCH_THRESHOLD,
+        "liveness": liveness,
+        "dateOfBirth": date_of_birth,
+        "age": age,
+        "ageEligible": age_eligible,
+        "eligible": face_verified and age_eligible,
+        "message": (
+            "Educational demo verification only. It does not prove legal identity, "
+            "citizenship, or real-world voter eligibility."
+        ),
+    }

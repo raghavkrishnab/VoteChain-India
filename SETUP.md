@@ -1,24 +1,8 @@
-# SETUP — Beginner-Friendly First Run
+# SETUP — First Run
 
-## 1. Extract and open
+Requirements: Node.js 20+, Python 3.11 or 3.12, MetaMask, a MongoDB Atlas database, an Alchemy (or other) Sepolia RPC URL, and [Tesseract OCR](https://github.com/UB-Mannheim/tesseract/wiki). PDF documents additionally need [Poppler](https://github.com/oschwartz10612/poppler-windows/releases).
 
-Extract `blockchain-ai-voting-system.zip`, then open the extracted `blockchain-ai-voting-system` folder in VS Code.
-
-## 2. MongoDB Atlas
-
-Create/use a MongoDB Atlas database. Copy the application connection string and place it in `backend/.env` as `MONGODB_URI`.
-
-## 3. Alchemy Sepolia
-
-In Alchemy, create/use an Ethereum Sepolia app and copy its HTTPS RPC URL. Put it in `blockchain/.env` as `SEPOLIA_RPC_URL` and `backend/.env` as `BLOCKCHAIN_RPC_URL`.
-
-## 4. Dedicated Sepolia deployment wallet
-
-Use a separate test wallet. Export its private key from MetaMask only for local Hardhat deployment and put it in `blockchain/.env` as `PRIVATE_KEY`. **Never use a mainnet key and never paste a key into chat.**
-
-## 5. Copy environment examples
-
-PowerShell:
+## 1. Environment files
 
 ```powershell
 Copy-Item backend/.env.example backend/.env
@@ -27,117 +11,89 @@ Copy-Item blockchain/.env.example blockchain/.env
 Copy-Item ai-service/.env.example ai-service/.env
 ```
 
-Generate a strong JWT secret locally and place it in `backend/.env` as `JWT_SECRET`.
+| File | Values |
+|---|---|
+| `blockchain/.env` | `SEPOLIA_RPC_URL`, `PRIVATE_KEY` of a **dedicated test wallet** (never a mainnet key, never paste it into chat) |
+| `backend/.env` | `MONGODB_URI`, `JWT_SECRET` (random, 32+ chars), `BLOCKCHAIN_RPC_URL` (same RPC URL), `CONTRACT_ADDRESS` (after step 4) |
+| `frontend/.env` | `VITE_CONTRACT_ADDRESS` (after step 4) |
+| `ai-service/.env` | Optional: `TESSERACT_CMD`, `POPPLER_PATH`, `FACE_MATCH_THRESHOLD` |
 
-## 6. Install Node dependencies
+## 2. Install dependencies
 
 ```powershell
-cd blockchain
-npm install
-cd ../backend
-npm install
-cd ../frontend
-npm install
+cd blockchain; npm install; cd ..
+cd backend;    npm install; cd ..
+cd frontend;   npm install; cd ..
+
+cd ai-service
+python -m venv venv
+.\venv\Scripts\Activate.ps1
+pip install -r requirements.txt
 cd ..
 ```
 
-Do not install the Python packages again; the existing `ai-service/venv` is intentionally reused.
+A `venv` copied from another computer does not work (it points at that computer's Python install). Delete it and recreate it as shown above.
 
-## 7. Hardhat tests
+## 3. Test the contract
 
 ```powershell
 cd blockchain
-npx hardhat test
+npm test
 ```
 
-## 8. Create the demo admin
+## 4. Deploy to Sepolia and sync the ABI
 
-Add these temporary variables to `backend/.env` for the one-time admin seed: `ADMIN_EMAIL`, `ADMIN_PASSWORD`, and `ADMIN_WALLET_ADDRESS` (the same wallet that deploys the contract). Then run:
+```powershell
+npm run deploy
+npm run sync-abi
+```
+
+Copy the printed address into `backend/.env` → `CONTRACT_ADDRESS` and `frontend/.env` → `VITE_CONTRACT_ADDRESS`. `sync-abi` copies the compiled ABI into both the frontend and the backend; rerun `npm run compile` and `npm run sync-abi` after every contract change.
+
+**Redeploying?** Elections from an older contract can't be used any more. Clear them (users are kept) with:
+
+```powershell
+cd backend
+npm run reset:elections -- --yes
+```
+
+## 5. Create the admin account
+
+In `backend/.env` set `ADMIN_EMAIL`, `ADMIN_PASSWORD` and `ADMIN_WALLET_ADDRESS` (the wallet that deployed the contract), then:
 
 ```powershell
 cd backend
 npm run seed:admin
 ```
 
-Remove `ADMIN_PASSWORD` afterward if you do not need it again.
+Remove `ADMIN_PASSWORD` from `.env` afterwards.
 
-## 9. Deploy to Sepolia
-
-```powershell
-npx hardhat run scripts/deploy.js --network sepolia
-```
-
-Copy the printed contract address into:
-
-- `blockchain/.env` → `CONTRACT_ADDRESS`
-- `frontend/.env` → `VITE_CONTRACT_ADDRESS`
-- `backend/.env` → `CONTRACT_ADDRESS`
-
-Then sync the actual compiled ABI:
+## 6. Run the three services (three terminals)
 
 ```powershell
-npm run sync-abi
+cd ai-service; .\venv\Scripts\Activate.ps1; python -m uvicorn main:app --reload --port 8000
+cd backend;    npm run dev
+cd frontend;   npm run dev
 ```
 
-This copies the ABI produced by Hardhat into the frontend. The checked-in frontend ABI is only a bootstrap copy; after every contract change, run `npm run compile` and `npm run sync-abi`.
+Open `http://localhost:5173`. The first verification downloads the InsightFace model (~300 MB).
 
-## 10. Start AI service
+## 7. Demo flow
 
-Use the existing Python 3.12 environment:
-
-```powershell
-cd ..\ai-service
-.\venv\Scripts\Activate.ps1
-python -m uvicorn main:app --reload --host 0.0.0.0 --port 8000
-```
-
-Do not recreate or delete `venv`. InsightFace may download its model pack on its first real verification run; this is normal.
-
-## 11. Start backend
-
-Open a second terminal:
-
-```powershell
-cd backend
-npm run dev
-```
-
-Expected: `Server running on http://localhost:5000` and `MongoDB connected`.
-
-## 12. Start frontend
-
-Open a third terminal:
-
-```powershell
-cd frontend
-npm run dev
-```
-
-Open `http://localhost:5173`.
-
-## 13. MetaMask
-
-Switch MetaMask to **Ethereum Sepolia**. Never enter a private key into the application. The browser only requests wallet connection, message signatures, and contract transactions.
-
-## 14. Demo flow
-
-1. Register a synthetic demo voter.
-2. Connect MetaMask.
-3. Complete the nonce/signature login.
-4. Perform AI verification with two consented demo images of the same person: a reference image and a current image.
-5. From the admin wallet, register the voter's wallet on-chain and approve the demo voter.
-6. Create an election and candidates from the admin dashboard.
-7. Start the election.
-8. Vote from the voter wallet.
-9. Wait for the transaction receipt before treating the vote as successful.
-10. Attempt a second vote from the same wallet. The smart contract must reject it.
-11. Open Results and Audit.
+1. **Voter:** register with MetaMask connected (you sign a message proving wallet ownership), a demo document showing a date of birth, and a reference face photo.
+2. **Voter:** sign in and open **Verify**. Take a live photo with the camera or upload one. The AI service matches it against the registered reference face and reads the age from the document.
+3. **Admin** (deployer wallet in MetaMask): open **Admin**, then **Register & approve** for the voter. This registers the wallet on-chain, then marks the voter approved.
+4. **Admin:** create an election, add candidates, then **Start election**. Each step is a transaction.
+5. **Voter:** open **Vote**, choose a candidate and confirm in MetaMask. The backend checks the transaction receipt before recording the vote.
+6. Try to vote again: the contract rejects it with `Already voted`.
+7. Check **Results** (read live from the contract) and **Audit** (links to Etherscan).
 
 ## Troubleshooting
 
-- **Wrong network:** switch MetaMask to Sepolia.
-- **Insufficient ETH:** fund the dedicated Sepolia wallet using a faucet.
-- **AI unavailable:** confirm port `8000` and that the existing Python 3.12 venv is activated.
+- **Wrong network:** the app asks MetaMask to switch to Sepolia; approve it.
+- **Insufficient ETH:** fund the wallet from a Sepolia faucet.
+- **`Admin only` revert:** MetaMask must use the wallet that deployed the contract.
+- **"Blockchain RPC or contract address is not configured":** set `BLOCKCHAIN_RPC_URL` and `CONTRACT_ADDRESS` in `backend/.env`.
+- **"Could not read voter document":** install Tesseract, or set `TESSERACT_CMD`. For PDFs, set `POPPLER_PATH`.
+- **AI service unavailable:** check it is running on port 8000 with the venv activated.
 - **MongoDB unavailable:** check Atlas network access and `MONGODB_URI`.
-- **Contract not configured:** confirm `VITE_CONTRACT_ADDRESS` and rerun `npm run sync-abi`.
-- **Admin actions rejected:** connect the same wallet used to deploy the contract, because the deployer is the contract admin.

@@ -1,2 +1,33 @@
-import 'dotenv/config';import bcrypt from 'bcrypt';import mongoose from 'mongoose';import User from '../src/models/User.js';
-const uri=process.env.MONGODB_URI;const email=process.env.ADMIN_EMAIL;const password=process.env.ADMIN_PASSWORD;const wallet=process.env.ADMIN_WALLET_ADDRESS;if(!uri||!email||!password||!wallet) throw new Error('Set MONGODB_URI, ADMIN_EMAIL, ADMIN_PASSWORD and ADMIN_WALLET_ADDRESS in backend/.env for this one-time seed.');await mongoose.connect(uri);const hash=await bcrypt.hash(password,12);await User.findOneAndUpdate({email},{name:'Demo Admin',email,passwordHash:hash,role:'admin',walletAddress:wallet.toLowerCase(),demoVoterId:'DEMO-ADMIN'},{upsert:true,new:true});console.log('Admin user created/updated.');await mongoose.disconnect();
+import 'dotenv/config';
+import bcrypt from 'bcrypt';
+import mongoose from 'mongoose';
+import { ethers } from 'ethers';
+
+import User from '../src/models/User.js';
+
+const { MONGODB_URI, ADMIN_EMAIL, ADMIN_PASSWORD, ADMIN_WALLET_ADDRESS } = process.env;
+
+if (!MONGODB_URI || !ADMIN_EMAIL || !ADMIN_PASSWORD || !ADMIN_WALLET_ADDRESS) {
+  console.error('Set MONGODB_URI, ADMIN_EMAIL, ADMIN_PASSWORD and ADMIN_WALLET_ADDRESS in backend/.env for this one-time seed.');
+  process.exit(1);
+}
+if (!ethers.isAddress(ADMIN_WALLET_ADDRESS)) {
+  console.error('ADMIN_WALLET_ADDRESS is not a valid address.');
+  process.exit(1);
+}
+
+await mongoose.connect(MONGODB_URI);
+await User.findOneAndUpdate(
+  { email: ADMIN_EMAIL.toLowerCase() },
+  {
+    name: 'Demo Admin',
+    email: ADMIN_EMAIL.toLowerCase(),
+    passwordHash: await bcrypt.hash(ADMIN_PASSWORD, 12),
+    role: 'admin',
+    walletAddress: ADMIN_WALLET_ADDRESS.toLowerCase(),
+    demoVoterId: 'DEMO-ADMIN',
+  },
+  { upsert: true, new: true }
+);
+console.log('Admin user created/updated.');
+await mongoose.disconnect();

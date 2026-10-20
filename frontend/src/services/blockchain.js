@@ -1,22 +1,87 @@
 import { ethers } from 'ethers';
 import abi from '../config/contractAbi';
-import { CHAIN_ID, CONTRACT_ADDRESS } from '../config/config';
+import { CHAIN_ID, CONTRACT_ADDRESS, NETWORK_NAME } from '../config/config';
+
+// Must match backend/src/utils/messages.js exactly.
+const loginMessage = (nonce) => `Blockchain Voting Login\nNonce: ${nonce}`;
+const registrationMessage = (walletAddress, email) =>
+  `Blockchain Voting Registration\nWallet: ${walletAddress.toLowerCase()}\nEmail: ${email.toLowerCase()}`;
+
+async function switchToExpectedNetwork() {
+  try {
+    await window.ethereum.request({
+      method: 'wallet_switchEthereumChain',
+      params: [{ chainId: `0x${CHAIN_ID.toString(16)}` }],
+    });
+  } catch {
+    throw new Error(`Wrong network. Switch MetaMask to ${NETWORK_NAME}.`);
+  }
+}
 
 export async function connectWallet() {
   if (!window.ethereum) throw new Error('MetaMask is not installed.');
-  const provider = new ethers.BrowserProvider(window.ethereum);
+  let provider = new ethers.BrowserProvider(window.ethereum);
   await provider.send('eth_requestAccounts', []);
-  const network = await provider.getNetwork();
-  if (network.chainId !== CHAIN_ID) throw new Error('Wrong network. Switch MetaMask to Ethereum Sepolia.');
+  if ((await provider.getNetwork()).chainId !== CHAIN_ID) {
+    await switchToExpectedNetwork();
+    // An ethers provider is bound to the network it first saw.
+    provider = new ethers.BrowserProvider(window.ethereum);
+  }
   const signer = await provider.getSigner();
-  return { address: await signer.getAddress(), provider, signer };
+  return { address: (await signer.getAddress()).toLowerCase(), provider, signer };
 }
-export function getContract(signerOrProvider) { if (!CONTRACT_ADDRESS) throw new Error('Contract address is not configured.'); return new ethers.Contract(CONTRACT_ADDRESS, abi, signerOrProvider); }
-export async function signNonce(address, nonce) { const { signer } = await connectWallet(); if ((await signer.getAddress()).toLowerCase() !== address.toLowerCase()) throw new Error('Connected wallet does not match the account.'); return signer.signMessage(`Blockchain Voting Login\nNonce: ${nonce}`); }
-export async function castVote(candidateId) { const { signer } = await connectWallet(); const contract = getContract(signer); const tx = await contract.castVote(candidateId); const receipt = await tx.wait(); return { hash: receipt.hash, blockNumber: receipt.blockNumber }; }
-export async function registerOnChain(voter) { const { signer } = await connectWallet(); const contract = getContract(signer); const tx = await contract.registerVoter(voter); return tx.wait(); }
-export async function addCandidateOnChain(id, name) { const { signer } = await connectWallet(); const tx = await getContract(signer).addCandidate(id, name); return tx.wait(); }
-export async function startElectionOnChain() { const { signer } = await connectWallet(); const tx = await getContract(signer).startElection(); return tx.wait(); }
-export async function endElectionOnChain() { const { signer } = await connectWallet(); const tx = await getContract(signer).endElection(); return tx.wait(); }
-export async function getResultsOnChain() { const { provider } = await connectWallet(); return getContract(provider).getResults(); }
-export async function hasVotedOnChain(address) { const { provider } = await connectWallet(); return getContract(provider).hasVoted(address); }
+
+async function connectContract() {
+  if (!CONTRACT_ADDRESS) throw new Error('Contract address is not configured (VITE_CONTRACT_ADDRESS).');
+  const { signer, address } = await connectWallet();
+  return { contract: new ethers.Contract(CONTRACT_ADDRESS, abi, signer), address };
+}
+
+async function send(method, ...args) {
+  const { contract } = await connectContract();
+  const receipt = await (await contract[method](...args)).wait();
+  return { contract, receipt };
+}
+
+async function signAs(expectedAddress, message) {
+  const { signer, address } = await connectWallet();
+  if (address !== expectedAddress.toLowerCase()) throw new Error('The connected MetaMask account does not match this wallet.');
+  return signer.signMessage(message);
+}
+
+export const signLoginNonce = (address, nonce) => signAs(address, loginMessage(nonce));
+export const signRegistration = (address, email) => signAs(address, registrationMessage(address, email));
+
+// ---- Admin transactions (must be sent from the contract's admin wallet) ----
+
+export async function createElectionOnChain() {
+  const { contract, receipt } = await send('createElection');
+  for (const log of receipt.logs) {
+    const parsed = contract.interface.parseLog(log);
+    if (parsed?.name === 'ElectionCreated') return Number(parsed.args.electionId);
+  }
+  throw new Error('ElectionCreated event not found in transaction receipt.');
+}
+
+export const addCandidateOnChain = (chainElectionId, candidateId, name) =>
+  send('addCandidate', chainElectionId, candidateId, name);
+export const startElectionOnChain = (chainElectionId) => send('startElection', chainElectionId);
+export const endElectionOnChain = (chainElectionId) => send('endElection', chainElectionId);
+
+export async function registerVoterOnChain(walletAddress) {
+  const { contract } = await connectContract();
+  if (await contract.registeredVoter(walletAddress)) return;
+  await (await contract.registerVoter(walletAddress)).wait();
+}
+
+// ---- Voter transactions ----
+
+export async function castVoteOnChain(chainElectionId, candidateId, accountWallet) {
+  const { contract, address } = await connectContract();
+  if (address !== accountWallet.toLowerCase()) {
+    throw new Error(`MetaMask is using ${address}, but your account's wallet is ${accountWallet}. Switch accounts in MetaMask.`);
+  }
+  if (await contract.hasVoted(chainElectionId, address)) throw new Error('This wallet has already voted in this election.');
+  const receipt = await (await contract.castVote(chainElectionId, candidateId)).wait();
+  return { hash: receipt.hash, blockNumber: receipt.blockNumber };
+}

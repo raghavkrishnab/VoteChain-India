@@ -1,142 +1,63 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 
 import api from '../services/api';
-
-import { connectWallet, signNonce } from '../services/blockchain';
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-
-  // Stores the currently logged-in user.
   const [user, setUser] = useState(null);
-
-  // Stores the connected MetaMask wallet address.
-  const [wallet, setWallet] = useState('');
-
-  // Tells the app whether we are still checking the saved JWT.
   const [loading, setLoading] = useState(true);
 
-  // Check whether the user already has a valid JWT when the app starts.
+  const logout = useCallback(() => {
+    localStorage.removeItem('jwt');
+    setUser(null);
+  }, []);
+
+  // Re-reads the user from the backend, e.g. after verification or admin approval.
+  const refreshUser = useCallback(async () => {
+    const { data } = await api.get('/auth/me');
+    setUser(data.user);
+    return data.user;
+  }, []);
+
   useEffect(() => {
-
-    // Get the JWT saved in the browser.
-    const token = localStorage.getItem('jwt');
-
-    // If there is no JWT, authentication checking is finished.
-    if (!token) {
+    if (!localStorage.getItem('jwt')) {
       setLoading(false);
       return;
     }
+    refreshUser()
+      .catch(logout)
+      .finally(() => setLoading(false));
+  }, [refreshUser, logout]);
 
-    // Ask the backend who the logged-in user is.
-    api.get('/auth/me')
-      .then((r) => {
-
-        // Save the user returned by the backend.
-        setUser(r.data.user);
-
-      })
-      .catch(() => {
-
-        // Remove an invalid or expired JWT.
-        localStorage.removeItem('jwt');
-
-        // Make sure no invalid user remains.
-        setUser(null);
-
-      })
-      .finally(() => {
-
-        // Authentication checking is now finished.
-        setLoading(false);
-
-      });
-
-  }, []);
-
-  // Normal email/password login.
-  const login = async (email, password) => {
-
-    // Send login credentials to the backend.
-    const r = await api.post('/auth/login', {
-      email,
-      password
-    });
-
-    // Save the JWT in the browser.
-    localStorage.setItem('jwt', r.data.token);
-
-    // Save the logged-in user.
-    setUser(r.data.user);
-
-    // Return backend response.
-    return r.data;
+  const startSession = ({ token, user: sessionUser }) => {
+    localStorage.setItem('jwt', token);
+    setUser(sessionUser);
+    return sessionUser;
   };
 
-  // MetaMask wallet login.
+  const login = async (email, password) => startSession((await api.post('/auth/login', { email, password })).data);
+
   const walletLogin = async () => {
-
-    // Connect MetaMask and get the wallet address.
+    // Loaded on demand so ethers is not part of the initial bundle.
+    const { connectWallet, signLoginNonce } = await import('../services/blockchain');
     const { address } = await connectWallet();
-
-    // Request a nonce from the backend.
-    const n = await api.post('/auth/nonce', {
-      walletAddress: address
-    });
-
-    // Sign the nonce using MetaMask.
-    const sig = await signNonce(address, n.data.nonce);
-
-    // Send the signed nonce to the backend for verification.
-    const r = await api.post('/auth/verify-signature', {
-      walletAddress: address,
-      signature: sig
-    });
-
-    // Save the JWT returned by the backend.
-    localStorage.setItem('jwt', r.data.token);
-
-    // Save the authenticated user.
-    setUser(r.data.user);
-
-    // Save the connected wallet address.
-    setWallet(address);
-
-    // Return backend response.
-    return r.data;
+    const { data } = await api.post('/auth/nonce', { walletAddress: address });
+    const signature = await signLoginNonce(address, data.nonce);
+    return startSession((await api.post('/auth/verify-signature', { walletAddress: address, signature })).data);
   };
 
-  // Logout the current user.
-  const logout = () => {
-
-    // Remove the saved JWT.
-    localStorage.removeItem('jwt');
-
-    // Clear the user.
-    setUser(null);
-
-    // Clear the wallet.
-    setWallet('');
-
-  };
-
-  // Provide authentication data to the rest of the application.
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        wallet,
-        loading,
-        login,
-        walletLogin,
-        logout
-      }}
-    >
+    <AuthContext.Provider value={{ user, setUser, loading, login, walletLogin, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );
 }
 
-// Custom hook for accessing authentication state.
 export const useAuth = () => useContext(AuthContext);
+
+export const isEligibleToVote = (user) =>
+  user?.role === 'voter' &&
+  user.documentStatus === 'approved' &&
+  user.verificationStatus === 'verified' &&
+  user.eligibilityStatus === 'eligible';

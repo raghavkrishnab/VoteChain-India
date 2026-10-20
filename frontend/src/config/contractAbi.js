@@ -1,4 +1,4 @@
-// Generated from Hardhat artifact. Do not edit manually.
+// Generated from Hardhat artifact by blockchain/scripts/sync-abi.js. Do not edit manually.
 export default [
   {
     "inputs": [
@@ -12,13 +12,14 @@ export default [
     "type": "constructor"
   },
   {
-    "inputs": [],
-    "name": "ReentrancyGuardReentrantCall",
-    "type": "error"
-  },
-  {
     "anonymous": false,
     "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "electionId",
+        "type": "uint256"
+      },
       {
         "indexed": true,
         "internalType": "uint256",
@@ -37,19 +38,52 @@ export default [
   },
   {
     "anonymous": false,
-    "inputs": [],
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "electionId",
+        "type": "uint256"
+      }
+    ],
+    "name": "ElectionCreated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "electionId",
+        "type": "uint256"
+      }
+    ],
     "name": "ElectionEnded",
     "type": "event"
   },
   {
     "anonymous": false,
-    "inputs": [],
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "electionId",
+        "type": "uint256"
+      }
+    ],
     "name": "ElectionStarted",
     "type": "event"
   },
   {
     "anonymous": false,
     "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "electionId",
+        "type": "uint256"
+      },
       {
         "indexed": true,
         "internalType": "address",
@@ -83,6 +117,11 @@ export default [
     "inputs": [
       {
         "internalType": "uint256",
+        "name": "electionId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
         "name": "candidateId",
         "type": "uint256"
       },
@@ -114,6 +153,11 @@ export default [
     "inputs": [
       {
         "internalType": "uint256",
+        "name": "electionId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
         "name": "candidateId",
         "type": "uint256"
       }
@@ -125,26 +169,70 @@ export default [
   },
   {
     "inputs": [],
-    "name": "electionActive",
+    "name": "createElection",
     "outputs": [
       {
-        "internalType": "bool",
+        "internalType": "uint256",
+        "name": "electionId",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "electionCount",
+    "outputs": [
+      {
+        "internalType": "uint256",
         "name": "",
-        "type": "bool"
+        "type": "uint256"
       }
     ],
     "stateMutability": "view",
     "type": "function"
   },
   {
-    "inputs": [],
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "electionId",
+        "type": "uint256"
+      }
+    ],
     "name": "endElection",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
   },
   {
-    "inputs": [],
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "electionId",
+        "type": "uint256"
+      }
+    ],
+    "name": "getElectionStatus",
+    "outputs": [
+      {
+        "internalType": "enum Voting.Status",
+        "name": "",
+        "type": "uint8"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "electionId",
+        "type": "uint256"
+      }
+    ],
     "name": "getResults",
     "outputs": [
       {
@@ -163,9 +251,9 @@ export default [
         "type": "uint256[]"
       },
       {
-        "internalType": "bool",
-        "name": "activeState",
-        "type": "bool"
+        "internalType": "enum Voting.Status",
+        "name": "status",
+        "type": "uint8"
       }
     ],
     "stateMutability": "view",
@@ -174,8 +262,13 @@ export default [
   {
     "inputs": [
       {
+        "internalType": "uint256",
+        "name": "electionId",
+        "type": "uint256"
+      },
+      {
         "internalType": "address",
-        "name": "",
+        "name": "voter",
         "type": "address"
       }
     ],
@@ -223,7 +316,13 @@ export default [
     "type": "function"
   },
   {
-    "inputs": [],
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "electionId",
+        "type": "uint256"
+      }
+    ],
     "name": "startElection",
     "outputs": [],
     "stateMutability": "nonpayable",

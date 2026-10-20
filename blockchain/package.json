@@ -1,1 +1,18 @@
-{"type":"module","scripts":{"compile":"hardhat compile","test":"hardhat test","deploy":"hardhat run scripts/deploy.js --network sepolia","sync-abi":"node scripts/sync-abi.js"},"devDependencies":{"@nomicfoundation/hardhat-toolbox":"^6.1.0","@openzeppelin/contracts":"^5.4.0","hardhat":"^2.26.3"},"dependencies":{"dotenv":"^17.4.2"}}
+{
+  "name": "voting-contracts",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "deploy": "hardhat run scripts/deploy.js --network sepolia",
+    "sync-abi": "node scripts/sync-abi.js"
+  },
+  "dependencies": {
+    "dotenv": "^17.4.2"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^6.1.0",
+    "hardhat": "^2.26.3"
+  }
+}

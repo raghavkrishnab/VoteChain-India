@@ -1,1 +1,19 @@
-import {Router} from 'express';import {auth} from '../middleware/auth.js';import VoteTransaction from '../models/VoteTransaction.js';const r=Router();r.get('/',auth,async(q,s)=>s.json({audit:await VoteTransaction.find().sort({createdAt:-1}).limit(200)}));r.get('/:transactionHash',auth,async(q,s)=>{const a=await VoteTransaction.findOne({transactionHash:q.params.transactionHash});if(!a)return s.status(404).json({message:'Transaction not found'});s.json({audit:a})});export default r;
+import { Router } from 'express';
+
+import { auth } from '../middleware/auth.js';
+import VoteTransaction from '../models/VoteTransaction.js';
+
+const r = Router();
+const withElection = (query) => query.populate('electionId', 'title chainElectionId');
+
+r.get('/', auth, async (req, res) => {
+  res.json({ audit: await withElection(VoteTransaction.find().sort({ createdAt: -1 }).limit(200)) });
+});
+
+r.get('/:transactionHash', auth, async (req, res) => {
+  const entry = await withElection(VoteTransaction.findOne({ transactionHash: String(req.params.transactionHash).toLowerCase() }));
+  if (!entry) return res.status(404).json({ message: 'Transaction not found' });
+  res.json({ audit: entry });
+});
+
+export default r;

@@ -1,265 +1,156 @@
-import { useEffect, useState } from 'react';
-import api from '../services/api';
-import { castVote, hasVotedOnChain } from '../services/blockchain';
+import { useCallback, useEffect, useState } from 'react';
+
+import api, { errorMessage } from '../services/api';
+import { castVoteOnChain } from '../services/blockchain';
 import { useAuth } from '../context/AuthContext';
+import { EXPLORER_URL } from '../config/config';
+import { Alert, Button, Card } from '../components/ui';
 
 export default function Vote() {
-  // Get the currently logged-in voter.
   const { user } = useAuth();
-
-  // Store the active election.
-  const [election, setElection] = useState(null);
-
-  // Store all candidates/parties.
+  const [elections, setElections] = useState([]);
+  const [electionId, setElectionId] = useState('');
   const [candidates, setCandidates] = useState([]);
-
-  // Store the selected candidate.
-  const [selectedCandidate, setSelectedCandidate] = useState(null);
-
-  // Store status messages.
-  const [msg, setMsg] = useState('');
-
-  // Store loading state.
+  const [selected, setSelected] = useState(null);
+  const [recorded, setRecorded] = useState(null);
+  // A vote that is on-chain but not yet indexed by the backend, kept so recording can be retried.
+  const [pendingTx, setPendingTx] = useState(null);
+  const [msg, setMsg] = useState({ kind: 'info', text: '' });
   const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
 
-  // Load the active election and its candidates.
   useEffect(() => {
-    const loadElection = async () => {
-      try {
-        // Get all elections.
-        const response = await api.get('/elections');
-
-        // Find the currently active election.
-        const activeElection = response.data.elections.find(
-          (item) => item.status === 'active'
-        );
-
-        // Save the active election.
-        setElection(activeElection);
-
-        // Load candidates if an active election exists.
-        if (activeElection) {
-          const candidateResponse = await api.get(
-            `/elections/${activeElection._id}/candidates`
-          );
-
-          // Save candidates.
-          setCandidates(candidateResponse.data.candidates);
-        }
-      } catch (error) {
-        setMsg(
-          error.response?.data?.message ||
-          'Unable to load election details.'
-        );
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadElection();
+    api
+      .get('/elections')
+      .then(({ data }) => {
+        const active = data.elections.filter((e) => e.status === 'active');
+        setElections(active);
+        setElectionId(active[0]?._id || '');
+      })
+      .catch((e) => setMsg({ kind: 'error', text: errorMessage(e, 'Unable to load elections.') }))
+      .finally(() => setLoading(false));
   }, []);
 
-  // Cast the selected vote.
+  useEffect(() => {
+    if (!electionId) return;
+    setSelected(null);
+    setPendingTx(null);
+    setMsg({ kind: 'info', text: '' });
+    Promise.all([api.get(`/elections/${electionId}/candidates`), api.get(`/voting/status/${electionId}`)])
+      .then(([c, s]) => {
+        setCandidates(c.data.candidates);
+        setRecorded(s.data.transaction);
+      })
+      .catch((e) => setMsg({ kind: 'error', text: errorMessage(e) }));
+  }, [electionId]);
+
+  const election = elections.find((e) => e._id === electionId);
+
+  const recordVote = useCallback(
+    async (hash) => {
+      const { data } = await api.post('/voting/transaction', { electionId, transactionHash: hash });
+      setRecorded(data.transaction);
+      setPendingTx(null);
+      setMsg({ kind: 'success', text: 'Vote confirmed on-chain and recorded.' });
+    },
+    [electionId]
+  );
+
   const vote = async () => {
-    // Make sure a candidate has been selected.
-    if (!selectedCandidate) {
-      setMsg('Please select a party/candidate first.');
-      return;
-    }
-
-    // Make sure an election exists.
-    if (!election) {
-      setMsg('No active election.');
-      return;
-    }
-
+    setBusy(true);
+    setMsg({ kind: 'info', text: 'Confirm the transaction in MetaMask and wait for it to be mined…' });
+    let hash;
     try {
-      // Check whether this wallet has already voted.
-      if (
-        user?.walletAddress &&
-        await hasVotedOnChain(user.walletAddress)
-      ) {
-        throw new Error('Vote rejected: voter has already voted.');
-      }
-
-      // Send the vote to the blockchain.
-      const result = await castVote(
-        selectedCandidate.candidateIdentifier
-      );
-
-      // Store the blockchain transaction in the backend.
-      await api.post('/voting/transaction', {
-        electionId: election._id,
-        candidateId: selectedCandidate._id,
-        transactionHash: result.hash,
-        blockNumber: result.blockNumber,
-      });
-
-      // Show successful transaction.
-      setMsg(
-        `Vote successful. Transaction: ${result.hash}`
-      );
-    } catch (error) {
-      // Show blockchain/backend error.
-      setMsg(
-        error.reason ||
-        error.response?.data?.message ||
-        error.message ||
-        'Vote failed.'
-      );
+      ({ hash } = await castVoteOnChain(election.chainElectionId, selected.candidateIdentifier, user.walletAddress));
+      setPendingTx(hash);
+      await recordVote(hash);
+    } catch (e) {
+      const text = hash
+        ? `Your vote is on-chain (${hash}) but recording it failed: ${errorMessage(e)}`
+        : errorMessage(e, 'Vote failed.');
+      setMsg({ kind: 'error', text });
+    } finally {
+      setBusy(false);
     }
   };
 
-  // Show loading state.
-  if (loading) {
-    return (
-      <div className="max-w-4xl mx-auto">
-        <p>Loading election...</p>
-      </div>
-    );
-  }
+  const retryRecord = async () => {
+    setBusy(true);
+    try {
+      await recordVote(pendingTx);
+    } catch (e) {
+      setMsg({ kind: 'error', text: errorMessage(e) });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (loading) return <p className="text-slate-500">Loading elections…</p>;
+  if (!elections.length) return <Card title="Cast your vote"><p className="text-slate-500">There is no active election right now.</p></Card>;
 
   return (
-    <div className="max-w-5xl mx-auto">
+    <div className="max-w-5xl mx-auto space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-3xl font-bold">Cast your vote</h1>
+          {election?.description && <p className="text-slate-600 mt-1">{election.description}</p>}
+        </div>
+        {elections.length > 1 && (
+          <select className="border rounded-lg px-3 py-2" value={electionId} onChange={(e) => setElectionId(e.target.value)}>
+            {elections.map((e) => <option key={e._id} value={e._id}>{e.title}</option>)}
+          </select>
+        )}
+      </div>
 
-      {/* Page heading */}
-      <h1 className="text-3xl font-bold mb-2">
-        Cast Your Vote
-      </h1>
+      {recorded ? (
+        <Alert kind="success">
+          You have voted in <b>{election.title}</b>. Transaction{' '}
+          <a className="underline break-all" href={`${EXPLORER_URL}/tx/${recorded.transactionHash}`} target="_blank" rel="noreferrer">
+            {recorded.transactionHash}
+          </a>{' '}
+          (block {recorded.blockNumber}).
+        </Alert>
+      ) : (
+        <>
+          <div className="grid md:grid-cols-2 gap-4">
+            {candidates.map((c) => {
+              const isSelected = selected?._id === c._id;
+              return (
+                <button
+                  key={c._id}
+                  type="button"
+                  disabled={busy || !!pendingTx}
+                  onClick={() => setSelected(c)}
+                  className={`text-left bg-white border-2 p-5 rounded-2xl transition ${isSelected ? 'border-indigo-600 bg-indigo-50' : 'border-slate-200 hover:border-indigo-400'}`}
+                >
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <h3 className="text-xl font-bold">{c.partySymbol} {c.partyName}</h3>
+                      <p className="font-medium text-slate-700 mt-1">Candidate: {c.name}</p>
+                    </div>
+                    <span className="text-2xl">{isSelected ? '✓' : '○'}</span>
+                  </div>
+                  {c.description && <p className="text-sm text-slate-600 mt-3">{c.description}</p>}
+                </button>
+              );
+            })}
+          </div>
 
-      {/* Election information */}
-      {election && (
-        <div className="mb-6">
-          <h2 className="text-xl font-semibold">
-            {election.title}
-          </h2>
-
-          {election.description && (
-            <p className="text-slate-600 mt-1">
-              {election.description}
-            </p>
+          {pendingTx ? (
+            <Button onClick={retryRecord} disabled={busy}>Retry recording vote</Button>
+          ) : (
+            selected && (
+              <Card title="Confirm your vote">
+                <p>You selected <b>{selected.partyName}</b> — {selected.name}.</p>
+                <p className="text-sm text-red-600 mt-3">⚠️ Once submitted to the blockchain, this vote cannot be changed.</p>
+                <Button className="mt-4" onClick={vote} disabled={busy}>{busy ? 'Submitting…' : 'Confirm vote'}</Button>
+              </Card>
+            )
           )}
-
-          <p className="text-sm text-slate-500 mt-2">
-            Select one party/candidate.
-          </p>
-        </div>
+        </>
       )}
 
-      {/* No election */}
-      {!election && (
-        <div className="bg-white border rounded-xl p-6">
-          No active election.
-        </div>
-      )}
-
-      {/* Candidate/party cards */}
-      {election && (
-        <div className="grid md:grid-cols-2 gap-4">
-
-          {candidates.map((candidate) => (
-            <button
-              key={candidate._id}
-              type="button"
-              onClick={() => {
-                setSelectedCandidate(candidate);
-                setMsg('');
-              }}
-              className={`text-left bg-white border-2 p-5 rounded-2xl transition ${
-                selectedCandidate?._id === candidate._id
-                  ? 'border-indigo-600 bg-indigo-50'
-                  : 'border-slate-200 hover:border-indigo-400'
-              }`}
-            >
-
-              {/* Selection indicator */}
-              <div className="flex items-start justify-between">
-
-                <div>
-                  {/* Party name */}
-                  <h3 className="text-xl font-bold">
-                    {candidate.partyName || candidate.party || 'Independent'}
-                  </h3>
-
-                  {/* Candidate name */}
-                  <p className="font-medium text-slate-700 mt-1">
-                    Candidate: {candidate.name}
-                  </p>
-                </div>
-
-                {/* Selected indicator */}
-                <div className="text-2xl">
-                  {selectedCandidate?._id === candidate._id
-                    ? '✓'
-                    : '○'}
-                </div>
-              </div>
-
-              {/* Candidate description */}
-              {candidate.description && (
-                <p className="text-sm text-slate-600 mt-4">
-                  {candidate.description}
-                </p>
-              )}
-
-              {/* Party symbol if your backend has one */}
-              {candidate.symbol && (
-                <div className="mt-4 text-sm">
-                  Symbol: {candidate.symbol}
-                </div>
-              )}
-
-            </button>
-          ))}
-
-        </div>
-      )}
-
-      {/* Confirmation section */}
-      {selectedCandidate && !msg.includes('Vote successful') && (
-        <div className="mt-8 bg-slate-50 border rounded-2xl p-6">
-
-          <h2 className="text-xl font-bold">
-            Confirm your vote
-          </h2>
-
-          <p className="mt-3">
-            You selected:
-          </p>
-
-          <p className="text-lg font-semibold mt-1">
-            {selectedCandidate.partyName ||
-              selectedCandidate.party ||
-              'Independent'}
-          </p>
-
-          <p className="text-slate-600">
-            {selectedCandidate.name}
-          </p>
-
-          <p className="text-sm text-red-600 mt-4">
-            ⚠️ Once submitted to the blockchain, this vote
-            cannot be changed.
-          </p>
-
-          <button
-            type="button"
-            onClick={vote}
-            className="mt-5 bg-indigo-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-indigo-700"
-          >
-            Confirm Vote
-          </button>
-
-        </div>
-      )}
-
-      {/* Result/status message */}
-      {msg && (
-        <div className="mt-6 bg-slate-100 border rounded-xl p-4 break-all">
-          {msg}
-        </div>
-      )}
-
+      <Alert kind={msg.kind}>{msg.text}</Alert>
     </div>
   );
 }

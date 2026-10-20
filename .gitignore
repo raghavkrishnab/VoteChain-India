@@ -3,8 +3,9 @@
 **/venv/
 **/dist/
 **/__pycache__/
+**/.pytest_cache/
 **/artifacts/
 **/cache/
-*.zip
 **/uploads/
 *.pyc
+*.zip

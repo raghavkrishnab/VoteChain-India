@@ -1,14 +1,17 @@
 # AI Service
 
-Uses the existing Python 3.12 virtual environment and the already installed FastAPI, OpenCV, InsightFace, ONNX Runtime, NumPy, Uvicorn and python-multipart packages.
-
-Run:
+FastAPI service on port 8000. See [docs/ai-verification.md](../docs/ai-verification.md).
 
 ```powershell
+python -m venv venv
 .\venv\Scripts\Activate.ps1
-python -m uvicorn main:app --reload --host 0.0.0.0 --port 8000
+pip install -r requirements.txt
+python -m uvicorn main:app --reload --port 8000
 ```
 
-`POST /verify` accepts a current image and a consented reference image. OpenCV detects exactly one face in each image; InsightFace/ONNX Runtime generates embeddings; cosine similarity is compared with an educational threshold; and a basic image-quality/liveness check is applied to the current image. Images are processed in memory and are not persisted.
+It needs [Tesseract OCR](https://github.com/UB-Mannheim/tesseract/wiki) (set `TESSERACT_CMD` if it is not on PATH) and, for PDF documents, Poppler (set `POPPLER_PATH`).
 
-This does not prove citizenship, legal identity, voter eligibility, or resistance to advanced spoofing.
+- `pytest` runs the unit and API tests.
+- `python ocr_check.py <document>` shows what OCR and date-of-birth extraction find in a document.
+
+This does not prove citizenship, legal identity or voter eligibility, and it does not resist spoofing.

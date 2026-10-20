@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Link, useNavigate } from 'react-router-dom';
+import { errorMessage } from '../services/api';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -20,11 +21,7 @@ export default function Login() {
       await login(email, password);
       navigate('/dashboard');
     } catch (error) {
-      setErr(
-        error.response?.data?.message ||
-        error.message ||
-        'Login failed'
-      );
+      setErr(errorMessage(error, 'Login failed'));
     } finally {
       setLoading(false);
     }
@@ -38,7 +35,7 @@ export default function Login() {
       await walletLogin();
       navigate('/dashboard');
     } catch (error) {
-      setErr(error.message || 'Wallet login failed');
+      setErr(errorMessage(error, 'Wallet login failed'));
     } finally {
       setLoading(false);
     }

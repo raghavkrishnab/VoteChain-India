@@ -2,81 +2,48 @@ import mongoose from 'mongoose';
 
 const schema = new mongoose.Schema(
   {
-    name: {
-      type: String,
-      required: true,
-      trim: true,
-    },
+    name: { type: String, required: true, trim: true },
+    email: { type: String, required: true, unique: true, lowercase: true, trim: true },
+    passwordHash: { type: String, required: true },
+    role: { type: String, enum: ['voter', 'admin'], default: 'voter' },
+    walletAddress: { type: String, default: '', lowercase: true, trim: true },
+    demoVoterId: { type: String, required: true, unique: true, trim: true },
 
-    email: {
-      type: String,
-      required: true,
-      unique: true,
-      lowercase: true,
-      trim: true,
-    },
+    // Server-side paths of the files uploaded at registration.
+    documentReference: { type: String, default: '' },
+    faceReference: { type: String, default: '' },
 
-    passwordHash: {
-      type: String,
-      required: true,
-    },
+    // Admin decision; approval also requires the wallet to be registered on-chain.
+    documentStatus: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending' },
+    // Result of the AI face match against `faceReference`.
+    verificationStatus: { type: String, enum: ['pending', 'verified', 'rejected'], default: 'pending' },
+    // Result of the AI age check on `documentReference`.
+    eligibilityStatus: { type: String, enum: ['pending', 'eligible', 'not_eligible'], default: 'pending' },
 
-    role: {
-      type: String,
-      enum: ['voter', 'admin'],
-      default: 'voter',
-    },
-
-    walletAddress: {
-      type: String,
-      default: '',
-    },
-
-    demoVoterId: {
-      type: String,
-      required: true,
-      unique: true,
-    },
-
-    // Path or identifier for the uploaded demo voter document
-    documentReference: {
-      type: String,
-      default: '',
-    },
-
-    // Path or identifier for the registered reference face
-    faceReference: {
-      type: String,
-      default: '',
-    },
-
-    // Document review status
-    documentStatus: {
-      type: String,
-      enum: ['pending', 'approved', 'rejected'],
-      default: 'pending',
-    },
-
-    verificationStatus: {
-      type: String,
-      enum: ['pending', 'verified', 'rejected'],
-      default: 'pending',
-    },
-
-    eligibilityStatus: {
-      type: String,
-      enum: ['pending', 'eligible', 'not_eligible'],
-      default: 'pending',
-    },
-
-    nonce: {
-      type: String,
-      default: '',
-    },
+    nonce: { type: String, default: '' },
   },
-  {
-    timestamps: true,
-  }
+  { timestamps: true }
 );
+
+// One account per wallet; accounts without a wallet are not constrained.
+schema.index(
+  { walletAddress: 1 },
+  { unique: true, partialFilterExpression: { walletAddress: { $type: 'string', $gt: '' } } }
+);
+
+schema.methods.toSafeJSON = function toSafeJSON() {
+  return {
+    id: this._id,
+    name: this.name,
+    email: this.email,
+    role: this.role,
+    walletAddress: this.walletAddress,
+    demoVoterId: this.demoVoterId,
+    documentStatus: this.documentStatus,
+    verificationStatus: this.verificationStatus,
+    eligibilityStatus: this.eligibilityStatus,
+    createdAt: this.createdAt,
+  };
+};
 
 export default mongoose.model('User', schema);

@@ -1,1 +1,11 @@
-import {Router} from 'express';import {auth} from '../middleware/auth.js';import {record,status} from '../controllers/votingController.js';const r=Router();r.get('/status',auth,status);r.post('/transaction',auth,record);export default r;
+import { Router } from 'express';
+
+import { auth } from '../middleware/auth.js';
+import { record, status } from '../controllers/votingController.js';
+
+const r = Router();
+
+r.get('/status/:electionId', auth, status);
+r.post('/transaction', auth, record);
+
+export default r;

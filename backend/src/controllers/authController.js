@@ -2,239 +2,122 @@ import bcrypt from 'bcrypt';
 import crypto from 'crypto';
 import path from 'path';
 import fs from 'fs/promises';
+import { fileURLToPath } from 'url';
 import { ethers } from 'ethers';
 
 import User from '../models/User.js';
 import { signToken } from '../utils/jwt.js';
+import { loginMessage, registrationMessage } from '../utils/messages.js';
+import { DOCUMENT_TYPES, IMAGE_TYPES } from '../middleware/upload.js';
+
+const UPLOAD_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'uploads', 'registration');
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const str = (value) => (typeof value === 'string' ? value.trim() : '');
+
+function recoverSigner(message, signature) {
+  try {
+    return ethers.verifyMessage(message, signature).toLowerCase();
+  } catch {
+    return null;
+  }
+}
 
 export async function register(req, res) {
-  const {
-    name,
-    email,
-    password,
-    demoVoterId,
-    walletAddress = '',
-  } = req.body;
-
+  const name = str(req.body.name);
+  const email = str(req.body.email).toLowerCase();
+  const password = typeof req.body.password === 'string' ? req.body.password : '';
+  const demoVoterId = str(req.body.demoVoterId);
+  const walletAddress = str(req.body.walletAddress).toLowerCase();
+  const signature = str(req.body.walletSignature);
   const documentFile = req.files?.document?.[0];
-  const referenceFaceFile = req.files?.referenceFace?.[0];
+  const faceFile = req.files?.referenceFace?.[0];
 
-  if (!name || !email || !password || !demoVoterId) {
-    return res.status(400).json({
-      message: 'Required fields are missing',
-    });
+  if (!name || !email || !password || !demoVoterId || !walletAddress) {
+    return res.status(400).json({ message: 'Name, email, password, demo voter ID and wallet are required' });
   }
+  if (!EMAIL_RE.test(email)) return res.status(400).json({ message: 'Invalid email address' });
+  if (password.length < 8) return res.status(400).json({ message: 'Password must be at least 8 characters' });
+  if (!ethers.isAddress(walletAddress)) return res.status(400).json({ message: 'Invalid wallet address' });
+  if (recoverSigner(registrationMessage(walletAddress, email), signature) !== walletAddress) {
+    return res.status(400).json({ message: 'Wallet signature is missing or does not match the wallet address' });
+  }
+  if (!documentFile || !faceFile) {
+    return res.status(400).json({ message: 'Demo voter document and reference face are required' });
+  }
+  if (req.body.consent !== 'true') return res.status(400).json({ message: 'Consent is required' });
 
-  if (!documentFile || !referenceFaceFile) {
-    return res.status(400).json({
-      message: 'Demo voter document and reference face are required',
-    });
-  }
+  const uniqueId = crypto.randomUUID();
+  const documentPath = path.join(UPLOAD_DIR, `${uniqueId}-document${DOCUMENT_TYPES[documentFile.mimetype]}`);
+  const facePath = path.join(UPLOAD_DIR, `${uniqueId}-reference-face${IMAGE_TYPES[faceFile.mimetype]}`);
 
-  if (password.length < 8) {
-    return res.status(400).json({
-      message: 'Password must be at least 8 characters',
-    });
-  }
-
-  if (walletAddress && !ethers.isAddress(walletAddress)) {
-    return res.status(400).json({
-      message: 'Invalid wallet address',
-    });
-  }
+  await fs.mkdir(UPLOAD_DIR, { recursive: true });
+  await fs.writeFile(documentPath, documentFile.buffer);
+  await fs.writeFile(facePath, faceFile.buffer);
 
   try {
-    const uploadDirectory = path.join(
-      process.cwd(),
-      'uploads',
-      'registration'
-    );
-
-    await fs.mkdir(uploadDirectory, {
-      recursive: true,
-    });
-
-    const uniqueId = crypto.randomUUID();
-
-    const documentExtension = path.extname(
-      documentFile.originalname
-    );
-
-    const faceExtension = path.extname(
-      referenceFaceFile.originalname
-    );
-
-    const documentName = `${uniqueId}-document${documentExtension}`;
-
-    const faceName = `${uniqueId}-reference-face${faceExtension}`;
-
-    const documentPath = path.join(
-      uploadDirectory,
-      documentName
-    );
-
-    const facePath = path.join(
-      uploadDirectory,
-      faceName
-    );
-
-    await fs.writeFile(
-      documentPath,
-      documentFile.buffer
-    );
-
-    await fs.writeFile(
-      facePath,
-      referenceFaceFile.buffer
-    );
-
-    const passwordHash = await bcrypt.hash(password, 12);
-
     const user = await User.create({
       name,
       email,
-      passwordHash,
+      passwordHash: await bcrypt.hash(password, 12),
       demoVoterId,
-      walletAddress: walletAddress.toLowerCase(),
+      walletAddress,
       documentReference: documentPath,
       faceReference: facePath,
-      documentStatus: 'pending',
     });
-
-    res.status(201).json({
-      message: 'Registered',
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        walletAddress: user.walletAddress,
-        documentStatus: user.documentStatus,
-      },
-    });
+    res.status(201).json({ message: 'Registered', user: user.toSafeJSON() });
   } catch (e) {
-    res.status(400).json({
-      message:
-        e.code === 11000
-          ? 'Email or demo voter ID already exists'
-          : 'Registration failed',
-    });
+    // Do not keep biometric files for an account that was never created.
+    await Promise.allSettled([fs.unlink(documentPath), fs.unlink(facePath)]);
+    if (e.code === 11000) {
+      return res.status(409).json({ message: 'Email, demo voter ID or wallet is already registered' });
+    }
+    throw e;
   }
 }
 
 export async function login(req, res) {
-  const { email, password } = req.body;
+  const email = str(req.body.email).toLowerCase();
+  const password = typeof req.body.password === 'string' ? req.body.password : '';
+  const user = email && password ? await User.findOne({ email }) : null;
 
-  const user = await User.findOne({ email });
-
-  if (
-    !user ||
-    !(await bcrypt.compare(password, user.passwordHash))
-  ) {
-    return res.status(401).json({
-      message: 'Invalid email or password',
-    });
+  if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
+    return res.status(401).json({ message: 'Invalid email or password' });
   }
-
-  res.json({
-    token: signToken(user),
-    user: safe(user),
-  });
+  res.json({ token: signToken(user), user: user.toSafeJSON() });
 }
 
 export async function nonce(req, res) {
-  const { walletAddress } = req.body;
+  const walletAddress = str(req.body.walletAddress).toLowerCase();
+  if (!ethers.isAddress(walletAddress)) return res.status(400).json({ message: 'Invalid wallet address' });
 
-  if (!ethers.isAddress(walletAddress)) {
-    return res.status(400).json({
-      message: 'Invalid wallet address',
-    });
-  }
+  const user = await User.findOne({ walletAddress });
+  if (!user) return res.status(404).json({ message: 'Register this wallet first' });
 
-  const user = await User.findOne({
-    walletAddress: walletAddress.toLowerCase(),
-  });
-
-  if (!user) {
-    return res.status(404).json({
-      message: 'Register this wallet first',
-    });
-  }
-
-  const n = crypto.randomBytes(24).toString('hex');
-
-  user.nonce = n;
-
+  user.nonce = crypto.randomBytes(24).toString('hex');
   await user.save();
-
-  res.json({
-    nonce: n,
-  });
+  res.json({ nonce: user.nonce });
 }
 
 export async function verifySignature(req, res) {
-  const { walletAddress, signature } = req.body;
-
-  const user = await User.findOne({
-    walletAddress: walletAddress.toLowerCase(),
-  });
-
-  if (!user || !user.nonce) {
-    return res.status(400).json({
-      message: 'Nonce not found',
-    });
+  const walletAddress = str(req.body.walletAddress).toLowerCase();
+  const signature = str(req.body.signature);
+  if (!ethers.isAddress(walletAddress) || !signature) {
+    return res.status(400).json({ message: 'Wallet address and signature are required' });
   }
 
-  const message = `Blockchain Voting Login
-Nonce: ${user.nonce}`;
+  const user = await User.findOne({ walletAddress });
+  if (!user?.nonce) return res.status(400).json({ message: 'Nonce not found; request a new one' });
 
-  let recovered;
-
-  try {
-    recovered = ethers.verifyMessage(
-      message,
-      signature
-    );
-  } catch {
-    return res.status(400).json({
-      message: 'Invalid signature',
-    });
-  }
-
-  if (
-    recovered.toLowerCase() !==
-    walletAddress.toLowerCase()
-  ) {
-    return res.status(401).json({
-      message: 'Signature does not match wallet',
-    });
-  }
-
+  const recovered = recoverSigner(loginMessage(user.nonce), signature);
+  // Single-use nonce, consumed whether or not the signature matched.
   user.nonce = '';
-
   await user.save();
+  if (recovered !== walletAddress) return res.status(401).json({ message: 'Signature does not match wallet' });
 
-  res.json({
-    token: signToken(user),
-    user: safe(user),
-  });
+  res.json({ token: signToken(user), user: user.toSafeJSON() });
 }
 
-export async function me(req, res) {
-  res.json({
-    user: safe(req.user),
-  });
-}
-
-function safe(u) {
-  return {
-    id: u._id,
-    name: u.name,
-    email: u.email,
-    role: u.role,
-    walletAddress: u.walletAddress,
-    demoVoterId: u.demoVoterId,
-    documentStatus: u.documentStatus,
-    verificationStatus: u.verificationStatus,
-    eligibilityStatus: u.eligibilityStatus,
-  };
+export function me(req, res) {
+  res.json({ user: req.user.toSafeJSON() });
 }
