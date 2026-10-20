@@ -91,11 +91,11 @@ export default function Vote() {
     <div className="max-w-5xl mx-auto space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold">Cast your vote</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-brand-950">Cast your vote</h1>
           {election?.description && <p className="text-slate-600 mt-1">{election.description}</p>}
         </div>
         {elections.length > 1 && (
-          <select className="border rounded-lg px-3 py-2" value={electionId} onChange={(e) => setElectionId(e.target.value)}>
+          <select className="bg-white border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:border-brand-500" value={electionId} onChange={(e) => setElectionId(e.target.value)}>
             {elections.map((e) => <option key={e._id} value={e._id}>{e.title}</option>)}
           </select>
         )}
@@ -118,7 +118,7 @@ export default function Vote() {
                   type="button"
                   disabled={busy || !!pendingTx}
                   onClick={() => setSelected(c)}
-                  className={`text-left bg-white border-2 p-5 rounded-2xl transition ${isSelected ? 'border-indigo-600 bg-indigo-50' : 'border-slate-200 hover:border-indigo-400'}`}
+                  className={`text-left bg-white border-2 p-5 rounded-2xl transition ${isSelected ? 'border-brand-600 bg-brand-50' : 'border-slate-200 hover:border-brand-400'}`}
                 >
                   <div className="flex items-start justify-between">
                     <div>

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
 import api, { errorMessage } from '../services/api';
+import AuthShell from '../components/AuthShell';
 import { Alert, Button, inputClass } from '../components/ui';
 
 const FIELDS = [
@@ -62,54 +63,56 @@ export default function Register() {
   };
 
   return (
-    <div className="max-w-lg mx-auto my-8 bg-white p-6 rounded-2xl border space-y-4">
-      <div>
-        <h1 className="text-2xl font-bold">Demo Voter Registration</h1>
-        <p className="text-sm text-slate-600 mt-1">Use only fictional demo voter details and consented test images.</p>
-      </div>
-
-      <form onSubmit={submit} className="space-y-3">
-        {FIELDS.map(([name, placeholder, type]) => (
-          <input
-            key={name}
-            className={inputClass}
-            name={name}
-            type={type}
-            placeholder={placeholder}
-            minLength={name === 'password' ? 8 : undefined}
-            value={form[name]}
-            onChange={(e) => setForm({ ...form, [name]: e.target.value })}
-            required
-          />
+    <AuthShell
+      title="Register as a voter"
+      subtitle="Use fictional demo details and consented test images only."
+      footer={<>Already registered? <Link className="text-brand-700 font-semibold hover:underline" to="/login">Sign in</Link></>}
+    >
+      <form onSubmit={submit} className="space-y-4">
+        {FIELDS.map(([name, label, type]) => (
+          <label key={name} className="block">
+            <span className="text-sm font-medium text-slate-700">{label}</span>
+            <input
+              className={`${inputClass} mt-1`}
+              name={name}
+              type={type}
+              minLength={name === 'password' ? 8 : undefined}
+              value={form[name]}
+              onChange={(e) => setForm({ ...form, [name]: e.target.value })}
+              required
+            />
+          </label>
         ))}
 
-        <div className="flex gap-2">
-          <input className={`${inputClass} bg-slate-50`} value={wallet} placeholder="MetaMask wallet" readOnly />
-          <Button type="button" variant="secondary" onClick={connect}>🦊 {wallet ? 'Change' : 'Connect'}</Button>
+        <div>
+          <span className="text-sm font-medium text-slate-700">MetaMask wallet</span>
+          <div className="flex gap-2 mt-1">
+            <input className={`${inputClass} bg-slate-50 font-mono text-sm`} value={wallet} placeholder="Not connected" readOnly />
+            <Button type="button" variant="saffron" onClick={connect}>{wallet ? 'Change' : 'Connect'}</Button>
+          </div>
+          <span className="text-xs text-slate-500">This wallet is your voter identity. Use a different account from the admin's.</span>
         </div>
 
         <label className="block">
-          <span className="font-medium">Demo voter document</span>
-          <input className={`${inputClass} mt-1`} type="file" accept="image/jpeg,image/png,image/webp,image/bmp,application/pdf" onChange={(e) => setDocument(e.target.files[0] || null)} required />
-          <span className="text-xs text-slate-500">Must show a date of birth, e.g. “DOB: 15/08/2004”. JPG, PNG, WEBP, BMP or PDF, max 5 MB.</span>
+          <span className="text-sm font-medium text-slate-700">Demo ID document</span>
+          <input className={`${inputClass} mt-1 text-sm`} type="file" accept="image/jpeg,image/png,image/webp,image/bmp,application/pdf" onChange={(e) => setDocument(e.target.files[0] || null)} required />
+          <span className="text-xs text-slate-500">Must show a real date of birth, e.g. “Date of Birth: 15 AUG 1995”. JPG, PNG, WEBP, BMP or PDF, up to 5 MB.</span>
         </label>
 
         <label className="block">
-          <span className="font-medium">Reference face photo</span>
-          <input className={`${inputClass} mt-1`} type="file" accept="image/jpeg,image/png,image/webp,image/bmp" onChange={(e) => setReferenceFace(e.target.files[0] || null)} required />
-          <span className="text-xs text-slate-500">A clear, front-facing photo of the same demo person. It is compared with a live photo later.</span>
+          <span className="text-sm font-medium text-slate-700">Reference face photo</span>
+          <input className={`${inputClass} mt-1 text-sm`} type="file" accept="image/jpeg,image/png,image/webp,image/bmp" onChange={(e) => setReferenceFace(e.target.files[0] || null)} required />
+          <span className="text-xs text-slate-500">A clear, front-facing photo. Your live photo is compared with it later.</span>
         </label>
 
-        <label className="flex items-start gap-2 text-sm">
-          <input type="checkbox" className="mt-1" checked={consent} onChange={(e) => setConsent(e.target.checked)} required />
+        <label className="flex items-start gap-2 text-sm text-slate-700">
+          <input type="checkbox" className="mt-1 accent-brand-700" checked={consent} onChange={(e) => setConsent(e.target.checked)} required />
           <span>I consent to using these images for this educational prototype.</span>
         </label>
 
-        <Button type="submit" className="w-full py-3" disabled={busy}>{busy ? 'Registering…' : 'Create demo account'}</Button>
+        <Button type="submit" className="w-full py-3" disabled={busy}>{busy ? 'Registering…' : 'Create voter account'}</Button>
+        <Alert kind={msg.kind}>{msg.text}</Alert>
       </form>
-
-      <Alert kind={msg.kind}>{msg.text}</Alert>
-      <p className="text-center text-sm text-slate-500">Already registered? <Link className="text-indigo-600" to="/login">Sign in</Link></p>
-    </div>
+    </AuthShell>
   );
 }

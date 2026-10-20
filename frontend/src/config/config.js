@@ -7,3 +7,4 @@ export const RPC_URL = import.meta.env.VITE_RPC_URL || 'https://rpc.sepolia.org'
 // Empty on a local chain, where there is no block explorer.
 export const EXPLORER_URL = import.meta.env.VITE_EXPLORER_URL ?? 'https://sepolia.etherscan.io';
 export const IS_LOCAL_CHAIN = CHAIN_ID === 31337n;
+export const APP_NAME = import.meta.env.VITE_APP_NAME || 'VoteChain India';

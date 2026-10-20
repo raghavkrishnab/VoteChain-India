@@ -83,7 +83,7 @@ export default function Verify() {
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Voter Verification</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold text-brand-950">Voter Verification</h1>
         <p className="mt-2 text-sm text-slate-600">
           A live photo is compared with the reference face you registered, and your date of birth is read from your demo document.
         </p>

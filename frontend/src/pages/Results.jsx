@@ -43,11 +43,11 @@ export default function Results() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold">Public results</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-brand-950">Public results</h1>
           <p className="text-sm text-slate-600 mt-1">Vote counts are read live from the smart contract and refresh every 10 seconds.</p>
         </div>
         {elections.length > 1 && (
-          <select className="border rounded-lg px-3 py-2" value={electionId} onChange={(e) => setElectionId(e.target.value)}>
+          <select className="bg-white border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:border-brand-500" value={electionId} onChange={(e) => setElectionId(e.target.value)}>
             {elections.map((e) => <option key={e._id} value={e._id}>{e.title}</option>)}
           </select>
         )}
@@ -74,7 +74,7 @@ export default function Results() {
                     <span>{r.votes} ({pct}%)</span>
                   </div>
                   <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
-                    <div className="h-full bg-indigo-600" style={{ width: `${pct}%` }} />
+                    <div className="h-full bg-brand-600" style={{ width: `${pct}%` }} />
                   </div>
                 </li>
               );

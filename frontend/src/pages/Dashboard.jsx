@@ -36,25 +36,26 @@ export default function Dashboard() {
   return (
     <div className="space-y-6">
       <div>
-        <p className="text-indigo-600 text-sm font-medium">{isVoter ? 'Voter dashboard' : 'Administrator'}</p>
-        <h1 className="text-3xl font-bold mt-1">Welcome, {user.name}</h1>
+        <p className="text-saffron-500 text-xs font-semibold uppercase tracking-wider">{isVoter ? 'Voter dashboard' : 'Administrator'}</p>
+        <h1 className="text-2xl sm:text-3xl font-bold text-brand-950 mt-1">Welcome, {user.name}</h1>
       </div>
 
-      <div className="rounded-3xl bg-gradient-to-r from-indigo-700 to-violet-700 p-7 text-white shadow-xl flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+      <div className="relative overflow-hidden rounded-3xl bg-brand-900 p-7 pt-8 text-white shadow-xl flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+        <div className="absolute inset-x-0 top-0 tricolor" />
         <div>
-          <p className="text-indigo-200 text-sm font-medium">ACTIVE ELECTIONS</p>
+          <p className="text-saffron-400 text-xs font-semibold uppercase tracking-wider">Active elections</p>
           <h2 className="text-2xl font-bold mt-2">{active.length ? active.map((e) => e.title).join(' · ') : 'No active election'}</h2>
-          <p className="text-indigo-100 mt-2">
+          <p className="text-brand-100 mt-2">
             {active.length ? 'Votes are cast directly to the smart contract from your wallet.' : 'Check back when an election has started.'}
           </p>
         </div>
         {isVoter && active.length > 0 && (
-          <Link to={canVote ? '/vote' : '/verify'} className="bg-white text-indigo-700 px-6 py-3 rounded-xl font-bold hover:bg-indigo-50 text-center">
+          <Link to={canVote ? '/vote' : '/verify'} className="bg-white text-brand-700 px-6 py-3 rounded-xl font-bold hover:bg-brand-50 text-center">
             {canVote ? 'Cast your vote →' : 'Complete verification →'}
           </Link>
         )}
         {!isVoter && (
-          <Link to="/admin" className="bg-white text-indigo-700 px-6 py-3 rounded-xl font-bold hover:bg-indigo-50 text-center">Open admin panel →</Link>
+          <Link to="/admin" className="bg-white text-brand-700 px-6 py-3 rounded-xl font-bold hover:bg-brand-50 text-center">Open admin panel →</Link>
         )}
       </div>
 
@@ -66,7 +67,7 @@ export default function Dashboard() {
               <Step done={user.verificationStatus === 'verified' && user.eligibilityStatus === 'eligible'} title="AI verification">
                 Face match <StatusBadge status={user.verificationStatus} /> · Age check <StatusBadge status={user.eligibilityStatus} />
                 {user.verificationStatus !== 'verified' || user.eligibilityStatus !== 'eligible' ? (
-                  <Link to="/verify" className="ml-2 text-indigo-600">Verify now</Link>
+                  <Link to="/verify" className="ml-2 text-brand-600">Verify now</Link>
                 ) : null}
               </Step>
               <Step done={user.documentStatus === 'approved'} title="Admin approval">

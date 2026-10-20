@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import api, { errorMessage } from '../services/api';
 import {
   addCandidateOnChain,
+  connectWallet,
   createElectionOnChain,
   endElectionOnChain,
   registerVoterOnChain,
@@ -205,6 +206,46 @@ function ElectionManager({ election, onChange, setMsg }) {
   );
 }
 
+// Every admin action is a transaction from the contract's admin wallet, so check
+// up front that MetaMask is using that account.
+function AdminWalletCheck() {
+  const [contractAdmin, setContractAdmin] = useState('');
+  const [result, setResult] = useState(null);
+
+  useEffect(() => {
+    api.get('/health').then(({ data }) => setContractAdmin(data.blockchain?.admin || '')).catch(() => {});
+  }, []);
+
+  const check = async () => {
+    try {
+      const { address } = await connectWallet();
+      setResult(address === contractAdmin ? { kind: 'success', address } : { kind: 'error', address });
+    } catch (e) {
+      setResult({ kind: 'error', message: errorMessage(e) });
+    }
+  };
+
+  return (
+    <Card
+      title="Admin wallet"
+      subtitle="Only this wallet can register voters and manage elections on the blockchain."
+      action={<Button variant="saffron" onClick={check}>Check my MetaMask</Button>}
+    >
+      <p className="font-mono text-sm break-all text-brand-900">{contractAdmin || 'Blockchain not reachable'}</p>
+      {result && (
+        <div className="mt-3">
+          <Alert kind={result.kind}>
+            {result.message ||
+              (result.kind === 'success'
+                ? `MetaMask is using the admin wallet (${shortAddress(result.address)}). You're ready.`
+                : `MetaMask is using ${shortAddress(result.address)}, which is not the admin wallet. Switch accounts in MetaMask, or set ADMIN_WALLET_ADDRESS in backend/.env to your address and restart.`)}
+          </Alert>
+        </div>
+      )}
+    </Card>
+  );
+}
+
 export default function Admin() {
   const [elections, setElections] = useState([]);
   const [selectedId, setSelectedId] = useState('');
@@ -249,9 +290,12 @@ export default function Admin() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Admin</h1>
-        <p className="text-sm text-slate-600 mt-1">Transactions must be sent from the wallet that deployed the contract.</p>
+        <p className="text-saffron-500 text-xs font-semibold uppercase tracking-wider">Election control room</p>
+        <h1 className="text-2xl sm:text-3xl font-bold text-brand-950 mt-1">Admin</h1>
+        <p className="text-sm text-slate-600 mt-1">Create elections, add candidates and approve verified voters. Each action is confirmed in MetaMask.</p>
       </div>
+
+      <AdminWalletCheck />
 
       <Alert kind={msg.kind}>{msg.text}</Alert>
 
@@ -263,7 +307,7 @@ export default function Admin() {
                 <li key={e._id}>
                   <button
                     onClick={() => setSelectedId(e._id)}
-                    className={`w-full text-left px-3 py-2 rounded-lg flex justify-between items-center ${e._id === selectedId ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-slate-50'}`}
+                    className={`w-full text-left px-3 py-2 rounded-lg flex justify-between items-center ${e._id === selectedId ? 'bg-brand-50 text-brand-700' : 'hover:bg-slate-50'}`}
                   >
                     <span className="truncate">{e.title}</span>
                     <StatusBadge status={e.status} />

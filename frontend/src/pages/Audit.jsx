@@ -14,7 +14,7 @@ export default function Audit() {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-3xl font-bold">Audit trail</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold text-brand-950">Audit trail</h1>
         <p className="text-sm text-slate-600 mt-1">
           Every vote below was verified against its on-chain transaction receipt before being recorded. Each transaction can be checked independently on the blockchain.
         </p>
@@ -39,7 +39,7 @@ export default function Audit() {
                   <td className="p-3">{x.electionId?.title || '—'}</td>
                   <td className="p-3 font-mono" title={x.walletAddress}>{shortAddress(x.walletAddress)}</td>
                   <td className="p-3">{x.blockNumber}</td>
-                  <td className="p-3"><TxLink hash={x.transactionHash} short className="text-indigo-600" /></td>
+                  <td className="p-3"><TxLink hash={x.transactionHash} short className="text-brand-600" /></td>
                   <td className="p-3">{new Date(x.createdAt).toLocaleString()}</td>
                 </tr>
               ))}
