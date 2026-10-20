@@ -47,7 +47,7 @@ services:
       - key: CHAIN_ID
         value: "11155111"
       - key: CONTRACT_ADDRESS
-        value: SET_BY_DEPLOY
+        value: "0x8416733b29979DEe8ba304ce2eF0F8770b1F8046"
 
   - type: web
     name: votechain-india-web
@@ -63,7 +63,7 @@ services:
       - key: VITE_API_URL
         value: https://votechain-india-api.onrender.com/api
       - key: VITE_CONTRACT_ADDRESS
-        value: SET_BY_DEPLOY
+        value: "0x8416733b29979DEe8ba304ce2eF0F8770b1F8046"
       - key: VITE_CHAIN_ID
         value: "11155111"
       - key: VITE_NETWORK_NAME
