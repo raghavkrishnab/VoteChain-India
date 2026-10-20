@@ -81,6 +81,28 @@ describe('Voting', function () {
     await expect(contract.registerVoter(voter.address)).to.be.revertedWith('Voter already registered');
   });
 
+  it('unregisters voters so they can no longer vote, keeping cast votes', async () => {
+    const { contract, voter, other } = await activeElection();
+    await contract.registerVoter(other.address);
+    await contract.connect(voter).castVote(1, 1);
+
+    await expect(contract.unregisterVoters([voter.address, other.address]))
+      .to.emit(contract, 'VoterUnregistered').withArgs(voter.address)
+      .and.to.emit(contract, 'VoterUnregistered').withArgs(other.address);
+    expect(await contract.registeredVoter(voter.address)).to.equal(false);
+    await expect(contract.connect(other).castVote(1, 1)).to.be.revertedWith('Voter not registered');
+
+    const [, , counts] = await contract.getResults(1);
+    expect(counts).to.deep.equal([1n]);
+    // Unknown or already-removed wallets are skipped, not errors.
+    await expect(contract.unregisterVoters([voter.address])).to.not.emit(contract, 'VoterUnregistered');
+  });
+
+  it('only the admin can unregister voters', async () => {
+    const { contract, voter } = await activeElection();
+    await expect(contract.connect(voter).unregisterVoters([voter.address])).to.be.revertedWith('Admin only');
+  });
+
   it('enforces the election lifecycle', async () => {
     const { contract, voter } = await deploy();
     await contract.registerVoter(voter.address);

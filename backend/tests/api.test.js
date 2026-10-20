@@ -56,6 +56,8 @@ test('an invalid token is rejected', async () => {
 test('admin routes cannot be reached without auth', async () => {
   const res = await post('/elections', { title: 'x', chainElectionId: 1 });
   assert.equal(res.status, 401);
+  const del = await fetch(`${base}/voters/507f1f77bcf86cd799439011`, { method: 'DELETE' });
+  assert.equal(del.status, 401);
 });
 
 test('nonce rejects an invalid wallet address', async () => {

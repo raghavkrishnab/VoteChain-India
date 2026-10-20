@@ -1,3 +1,4 @@
+import fs from 'fs/promises';
 import { Router } from 'express';
 
 import { auth, adminOnly } from '../middleware/auth.js';
@@ -39,6 +40,23 @@ r.patch('/:id/approval', auth, adminOnly, async (req, res) => {
   voter.documentStatus = decision;
   await voter.save();
   res.json({ user: voter.toSafeJSON() });
+});
+
+// Deletes a voter account and its uploaded ID/face files. The wallet must first
+// be removed from the contract's voter list (Voting.unregisterVoters), otherwise
+// the deleted account could still vote by calling the contract directly.
+// Recorded votes stay in the audit log: they are already permanent on-chain.
+r.delete('/:id', auth, adminOnly, async (req, res) => {
+  const voter = await User.findOne({ _id: req.params.id, role: 'voter' });
+  if (!voter) return res.status(404).json({ message: 'Voter not found' });
+
+  if (voter.walletAddress && (await isRegisteredVoter(voter.walletAddress))) {
+    return res.status(409).json({ message: 'Remove the voter wallet from the blockchain voter list first' });
+  }
+
+  await Promise.allSettled([voter.documentReference, voter.faceReference].filter(Boolean).map((file) => fs.unlink(file)));
+  await voter.deleteOne();
+  res.json({ deleted: voter._id });
 });
 
 export default r;

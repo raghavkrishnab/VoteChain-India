@@ -85,6 +85,19 @@ export async function registerVoterOnChain(walletAddress) {
   }
 }
 
+// Removes wallets from the contract's voter list in one transaction. Returns
+// false when none of them were registered (no transaction needed).
+export async function unregisterVotersOnChain(walletAddresses) {
+  const { contract } = await connectContract();
+  const registered = [];
+  for (const address of walletAddresses) {
+    if (await contract.registeredVoter(address)) registered.push(address);
+  }
+  if (!registered.length) return false;
+  await (await contract.unregisterVoters(registered)).wait();
+  return true;
+}
+
 // ---- Voter transactions ----
 
 export async function castVoteOnChain(chainElectionId, candidateId, accountWallet) {

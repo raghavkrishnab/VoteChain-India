@@ -23,6 +23,7 @@ contract Voting {
     mapping(uint256 => Election) private elections;
 
     event VoterRegistered(address indexed voter);
+    event VoterUnregistered(address indexed voter);
     event ElectionCreated(uint256 indexed electionId);
     event CandidateAdded(uint256 indexed electionId, uint256 indexed candidateId, string name);
     event ElectionStarted(uint256 indexed electionId);
@@ -49,6 +50,17 @@ contract Voting {
         require(!registeredVoter[voter], "Voter already registered");
         registeredVoter[voter] = true;
         emit VoterRegistered(voter);
+    }
+
+    /// @notice Removes wallets from the voter list (e.g. when a voter account is deleted).
+    ///         Votes already cast stay counted; wallets not on the list are skipped.
+    function unregisterVoters(address[] calldata voters) external onlyAdmin {
+        for (uint256 i = 0; i < voters.length; i++) {
+            if (registeredVoter[voters[i]]) {
+                registeredVoter[voters[i]] = false;
+                emit VoterUnregistered(voters[i]);
+            }
+        }
     }
 
     function createElection() external onlyAdmin returns (uint256 electionId) {

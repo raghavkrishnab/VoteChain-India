@@ -20,6 +20,7 @@ Base URL `http://localhost:5000/api`. Authenticated routes need `Authorization: 
 | PATCH | `/elections/:id/start`, `/elections/:id/end` | admin | Syncs status from the chain |
 | GET | `/voters` | admin | Voter list |
 | PATCH | `/voters/:id/approval` | admin | `{ decision }` = `approved` or `rejected`; approval requires passed AI checks and an on-chain registered wallet |
+| DELETE | `/voters/:id` | admin | Deletes the account and its uploaded files; the wallet must first be removed on-chain with `unregisterVoters` |
 | POST | `/voting/transaction` | user | `{ electionId, transactionHash }`; the receipt is verified on-chain |
 | GET | `/voting/status/:electionId` | user | Whether this user's vote is recorded |
 | GET | `/audit`, `/audit/:transactionHash` | user | Recorded votes |

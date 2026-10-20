@@ -8,6 +8,7 @@ import {
   endElectionOnChain,
   registerVoterOnChain,
   startElectionOnChain,
+  unregisterVotersOnChain,
 } from '../services/blockchain';
 import { Alert, Button, Card, StatusBadge, inputClass, shortAddress } from '../components/ui';
 
@@ -32,12 +33,64 @@ async function chainThenSync(chainStep, syncStep) {
 function Voters({ setMsg }) {
   const [voters, setVoters] = useState([]);
   const [busyId, setBusyId] = useState('');
+  const [selected, setSelected] = useState(new Set());
+  const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(() => {
-    api.get('/voters').then((r) => setVoters(r.data.voters)).catch((e) => setMsg({ kind: 'error', text: errorMessage(e) }));
+    api
+      .get('/voters')
+      .then((r) => {
+        setVoters(r.data.voters);
+        // Drop selections for voters that no longer exist.
+        setSelected((prev) => new Set(r.data.voters.filter((v) => prev.has(v.id)).map((v) => v.id)));
+      })
+      .catch((e) => setMsg({ kind: 'error', text: errorMessage(e) }));
   }, [setMsg]);
 
   useEffect(load, [load]);
+
+  const toggle = (id) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  const allSelected = voters.length > 0 && selected.size === voters.length;
+  const toggleAll = () => setSelected(allSelected ? new Set() : new Set(voters.map((v) => v.id)));
+
+  // Removes the wallets from the blockchain voter list (one MetaMask transaction),
+  // then deletes the accounts and their uploaded files.
+  const remove = async (targets) => {
+    const names = targets.length === 1 ? targets[0].name : `${targets.length} voters`;
+    const ok = window.confirm(
+      `Delete ${names}? Their accounts and uploaded ID/face images are removed permanently, and their wallets can no longer vote. Votes already cast stay counted.`
+    );
+    if (!ok) return;
+
+    setDeleting(true);
+    try {
+      const wallets = targets.filter((v) => v.walletAddress && v.onChainRegistered !== false).map((v) => v.walletAddress);
+      if (wallets.length) {
+        setMsg({ kind: 'info', text: 'Removing wallets from the blockchain voter list — confirm in MetaMask…' });
+        await unregisterVotersOnChain(wallets);
+      }
+      setMsg({ kind: 'info', text: `Deleting ${names}…` });
+      const results = await Promise.allSettled(targets.map((v) => api.delete(`/voters/${v.id}`)));
+      const failed = results.filter((r) => r.status === 'rejected');
+      setMsg(
+        failed.length
+          ? { kind: 'error', text: `${targets.length - failed.length} deleted, ${failed.length} failed: ${errorMessage(failed[0].reason)}` }
+          : { kind: 'success', text: `Deleted ${names}.` }
+      );
+      load();
+    } catch (e) {
+      setMsg({ kind: 'error', text: errorMessage(e) });
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const decide = async (voter, decision) => {
     setBusyId(voter.id);
@@ -55,7 +108,16 @@ function Voters({ setMsg }) {
   };
 
   return (
-    <Card title={`Voters (${voters.length})`}>
+    <Card
+      title={`Voters (${voters.length})`}
+      action={
+        selected.size > 0 && (
+          <Button variant="danger" disabled={deleting} onClick={() => remove(voters.filter((v) => selected.has(v.id)))}>
+            {deleting ? 'Deleting…' : `Delete selected (${selected.size})`}
+          </Button>
+        )
+      }
+    >
       {voters.length === 0 ? (
         <p className="text-slate-500">No voters registered yet.</p>
       ) : (
@@ -63,6 +125,9 @@ function Voters({ setMsg }) {
           <table className="w-full text-sm">
             <thead className="text-left text-slate-500">
               <tr>
+                <th className="py-2 pr-2 w-8">
+                  <input type="checkbox" className="accent-brand-700" aria-label="Select all voters" checked={allSelected} onChange={toggleAll} />
+                </th>
                 <th className="py-2">Voter</th>
                 <th>Wallet</th>
                 <th>Face</th>
@@ -76,7 +141,10 @@ function Voters({ setMsg }) {
               {voters.map((v) => {
                 const aiPassed = v.verificationStatus === 'verified' && v.eligibilityStatus === 'eligible';
                 return (
-                  <tr key={v.id}>
+                  <tr key={v.id} className={selected.has(v.id) ? 'bg-brand-50/60' : ''}>
+                    <td className="py-3 pr-2">
+                      <input type="checkbox" className="accent-brand-700" aria-label={`Select ${v.name}`} checked={selected.has(v.id)} onChange={() => toggle(v.id)} />
+                    </td>
                     <td className="py-3">
                       <div className="font-medium">{v.name}</div>
                       <div className="text-slate-500">{v.email} · {v.demoVoterId}</div>
@@ -86,7 +154,8 @@ function Voters({ setMsg }) {
                     <td><StatusBadge status={v.eligibilityStatus} /></td>
                     <td><StatusBadge status={v.documentStatus} /></td>
                     <td title="Wallet registered in the Voting contract">{v.onChainRegistered === null ? '?' : v.onChainRegistered ? '✅' : '—'}</td>
-                    <td className="text-right whitespace-nowrap space-x-2">
+                    <td className="py-3">
+                      <div className="flex flex-wrap justify-end gap-2">
                       {(v.documentStatus !== 'approved' || v.onChainRegistered === false) && (
                         <Button
                           variant="success"
@@ -99,10 +168,14 @@ function Voters({ setMsg }) {
                         </Button>
                       )}
                       {v.documentStatus === 'pending' && (
-                        <Button variant="danger" className="text-xs px-3 py-1" disabled={busyId === v.id} onClick={() => decide(v, 'rejected')}>
+                        <Button variant="secondary" className="text-xs px-3 py-1" disabled={busyId === v.id} onClick={() => decide(v, 'rejected')}>
                           Reject
                         </Button>
                       )}
+                      <Button variant="danger" className="text-xs px-3 py-1" disabled={deleting || busyId === v.id} onClick={() => remove([v])}>
+                        Delete
+                      </Button>
+                      </div>
                     </td>
                   </tr>
                 );
