@@ -1,9 +1,9 @@
-import fs from 'fs/promises';
 import { Router } from 'express';
 
 import { auth, adminOnly } from '../middleware/auth.js';
 import User from '../models/User.js';
 import { isRegisteredVoter } from '../services/chain.js';
+import { deleteFile } from '../services/storage.js';
 
 const r = Router();
 
@@ -54,7 +54,7 @@ r.delete('/:id', auth, adminOnly, async (req, res) => {
     return res.status(409).json({ message: 'Remove the voter wallet from the blockchain voter list first' });
   }
 
-  await Promise.allSettled([voter.documentReference, voter.faceReference].filter(Boolean).map((file) => fs.unlink(file)));
+  await Promise.allSettled([voter.documentReference, voter.faceReference].filter(Boolean).map(deleteFile));
   await voter.deleteOne();
   res.json({ deleted: voter._id });
 });

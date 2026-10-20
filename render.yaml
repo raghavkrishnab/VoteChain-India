@@ -1,0 +1,72 @@
+# Render Blueprint: Dashboard → New → Blueprint → pick this repository.
+# Values marked `sync: false` are secrets that Render asks you to type in; they
+# never live in git. If Render gives a service a different URL than the ones
+# below (name already taken), update FRONTEND_URL, AI_SERVICE_URL and VITE_API_URL.
+services:
+  - type: web
+    name: votechain-india-ai
+    runtime: docker
+    rootDir: ai-service
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: FACE_MODEL
+        value: buffalo_s
+      - key: AI_SERVICE_TOKEN
+        generateValue: true
+
+  - type: web
+    name: votechain-india-api
+    runtime: node
+    rootDir: backend
+    plan: free
+    buildCommand: npm ci --omit=dev
+    startCommand: node src/server.js
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: MONGODB_URI
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: FRONTEND_URL
+        value: https://votechain-india-web.onrender.com
+      - key: AI_SERVICE_URL
+        value: https://votechain-india-ai.onrender.com
+      - key: AI_SERVICE_TOKEN
+        fromService:
+          type: web
+          name: votechain-india-ai
+          envVarKey: AI_SERVICE_TOKEN
+      - key: BLOCKCHAIN_RPC_URL
+        sync: false
+      - key: CHAIN_ID
+        value: "11155111"
+      - key: CONTRACT_ADDRESS
+        value: SET_BY_DEPLOY
+
+  - type: web
+    name: votechain-india-web
+    runtime: static
+    rootDir: frontend
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_API_URL
+        value: https://votechain-india-api.onrender.com/api
+      - key: VITE_CONTRACT_ADDRESS
+        value: SET_BY_DEPLOY
+      - key: VITE_CHAIN_ID
+        value: "11155111"
+      - key: VITE_NETWORK_NAME
+        value: Ethereum Sepolia
+      - key: VITE_RPC_URL
+        value: https://rpc.sepolia.org
+      - key: VITE_EXPLORER_URL
+        value: https://sepolia.etherscan.io

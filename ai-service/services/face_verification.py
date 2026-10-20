@@ -1,3 +1,4 @@
+import os
 import threading
 
 import cv2
@@ -43,7 +44,13 @@ def get_app():
         if _app is None:
             from insightface.app import FaceAnalysis
 
-            _app = FaceAnalysis(name="buffalo_l", providers=["CPUExecutionProvider"])
+            # Only detection + recognition are used. FACE_MODEL=buffalo_s needs far
+            # less memory than buffalo_l (e.g. for 512 MB hosting plans).
+            _app = FaceAnalysis(
+                name=os.getenv("FACE_MODEL", "buffalo_l"),
+                allowed_modules=["detection", "recognition"],
+                providers=["CPUExecutionProvider"],
+            )
             _app.prepare(ctx_id=0, det_size=(640, 640))
     return _app
 

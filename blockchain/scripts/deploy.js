@@ -67,6 +67,18 @@ updateEnvFile(path.join(root, 'frontend', `.env${chain.suffix}`), {
   VITE_RPC_URL: isLocal ? chain.rpc : 'https://rpc.sepolia.org',
   VITE_EXPLORER_URL: chain.explorer,
 });
-if (!isLocal) updateEnvFile(path.join(root, 'blockchain', '.env'), { CONTRACT_ADDRESS: address });
+if (!isLocal) {
+  updateEnvFile(path.join(root, 'blockchain', '.env'), { CONTRACT_ADDRESS: address });
+  // The Render blueprint carries the (public) contract address for the hosted app.
+  const blueprint = path.join(root, 'render.yaml');
+  if (fs.existsSync(blueprint)) {
+    const yaml = fs.readFileSync(blueprint, 'utf8').replace(
+      /(- key: (?:VITE_)?CONTRACT_ADDRESS\r?\n\s+value: ).*/g,
+      `$1"${address}"`
+    );
+    fs.writeFileSync(blueprint, yaml);
+    console.log('Updated render.yaml');
+  }
+}
 
 execFileSync(process.execPath, [path.join(root, 'blockchain', 'scripts', 'sync-abi.js')], { stdio: 'inherit' });

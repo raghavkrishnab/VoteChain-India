@@ -10,6 +10,8 @@ export const env = {
   JWT_SECRET: process.env.JWT_SECRET || '',
   FRONTEND_URL: process.env.FRONTEND_URL || 'http://localhost:5173',
   AI_SERVICE_URL: process.env.AI_SERVICE_URL || 'http://localhost:8000',
+  // Optional shared secret sent to the AI service (required there when it sets AI_SERVICE_TOKEN).
+  AI_SERVICE_TOKEN: process.env.AI_SERVICE_TOKEN || '',
   BLOCKCHAIN_RPC_URL: process.env.BLOCKCHAIN_RPC_URL || '',
   CHAIN_ID: Number(process.env.CHAIN_ID || 11155111),
   CONTRACT_ADDRESS: (process.env.CONTRACT_ADDRESS || '').toLowerCase(),

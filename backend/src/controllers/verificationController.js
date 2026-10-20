@@ -1,10 +1,10 @@
 import FormData from 'form-data';
 import axios from 'axios';
-import fs from 'fs/promises';
 import path from 'path';
 
 import { env } from '../config/env.js';
 import { DOCUMENT_TYPES } from '../middleware/upload.js';
+import { readFile } from '../services/storage.js';
 
 const MIME_BY_EXTENSION = Object.fromEntries(Object.entries(DOCUMENT_TYPES).map(([mime, ext]) => [ext, mime]));
 MIME_BY_EXTENSION['.jpeg'] = 'image/jpeg';
@@ -12,7 +12,7 @@ MIME_BY_EXTENSION['.jpeg'] = 'image/jpeg';
 async function readStoredFile(filePath, label) {
   if (!filePath) return null;
   try {
-    const buffer = await fs.readFile(filePath);
+    const buffer = await readFile(filePath);
     const extension = path.extname(filePath).toLowerCase();
     return { buffer, filename: `${label}${extension}`, contentType: MIME_BY_EXTENSION[extension] || 'application/octet-stream' };
   } catch {
@@ -45,7 +45,10 @@ export async function face(req, res) {
 
   let result;
   try {
-    ({ data: result } = await axios.post(`${env.AI_SERVICE_URL}/verify`, fd, { headers: fd.getHeaders(), timeout: 60000 }));
+    ({ data: result } = await axios.post(`${env.AI_SERVICE_URL}/verify`, fd, {
+      headers: { ...fd.getHeaders(), ...(env.AI_SERVICE_TOKEN && { 'X-Service-Token': env.AI_SERVICE_TOKEN }) },
+      timeout: 90000,
+    }));
   } catch (e) {
     // 4xx from the AI service are user-fixable (no face, blurry image, unreadable document).
     const status = e.response?.status;

@@ -11,7 +11,8 @@
     "dev:local": "node --env-file-if-exists=.env.localchain --watch src/server.js",
     "seed:admin:local": "node --env-file-if-exists=.env.localchain scripts/create-admin.js",
     "reset:elections:local": "node --env-file-if-exists=.env.localchain scripts/reset-elections.js --yes",
-    "db:local": "node scripts/local-db.js"
+    "db:local": "node scripts/local-db.js",
+    "copy-voters": "node scripts/copy-voters.js"
   },
   "dependencies": {
     "axios": "^1.11.0",
@@ -29,5 +30,8 @@
   },
   "devDependencies": {
     "mongodb-memory-server": "^11.3.0"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }

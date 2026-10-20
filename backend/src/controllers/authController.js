@@ -1,16 +1,13 @@
 import bcrypt from 'bcrypt';
 import crypto from 'crypto';
-import path from 'path';
-import fs from 'fs/promises';
-import { fileURLToPath } from 'url';
 import { ethers } from 'ethers';
 
 import User from '../models/User.js';
 import { signToken } from '../utils/jwt.js';
 import { loginMessage, registrationMessage } from '../utils/messages.js';
 import { DOCUMENT_TYPES, IMAGE_TYPES } from '../middleware/upload.js';
+import { saveFile, deleteFile } from '../services/storage.js';
 
-const UPLOAD_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'uploads', 'registration');
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const str = (value) => (typeof value === 'string' ? value.trim() : '');
@@ -47,13 +44,8 @@ export async function register(req, res) {
   }
   if (req.body.consent !== 'true') return res.status(400).json({ message: 'Consent is required' });
 
-  const uniqueId = crypto.randomUUID();
-  const documentPath = path.join(UPLOAD_DIR, `${uniqueId}-document${DOCUMENT_TYPES[documentFile.mimetype]}`);
-  const facePath = path.join(UPLOAD_DIR, `${uniqueId}-reference-face${IMAGE_TYPES[faceFile.mimetype]}`);
-
-  await fs.mkdir(UPLOAD_DIR, { recursive: true });
-  await fs.writeFile(documentPath, documentFile.buffer);
-  await fs.writeFile(facePath, faceFile.buffer);
+  const documentRef = await saveFile(documentFile.buffer, `document${DOCUMENT_TYPES[documentFile.mimetype]}`, documentFile.mimetype);
+  const faceRef = await saveFile(faceFile.buffer, `reference-face${IMAGE_TYPES[faceFile.mimetype]}`, faceFile.mimetype);
 
   try {
     const user = await User.create({
@@ -62,13 +54,13 @@ export async function register(req, res) {
       passwordHash: await bcrypt.hash(password, 12),
       demoVoterId,
       walletAddress,
-      documentReference: documentPath,
-      faceReference: facePath,
+      documentReference: documentRef,
+      faceReference: faceRef,
     });
     res.status(201).json({ message: 'Registered', user: user.toSafeJSON() });
   } catch (e) {
     // Do not keep biometric files for an account that was never created.
-    await Promise.allSettled([fs.unlink(documentPath), fs.unlink(facePath)]);
+    await Promise.allSettled([deleteFile(documentRef), deleteFile(faceRef)]);
     if (e.code === 11000) {
       return res.status(409).json({ message: 'Email, demo voter ID or wallet is already registered' });
     }

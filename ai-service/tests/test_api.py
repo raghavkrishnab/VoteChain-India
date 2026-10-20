@@ -15,6 +15,13 @@ def test_health_reports_model_state():
     assert isinstance(body["modelReady"], bool)
 
 
+def test_verify_requires_service_token_when_configured(monkeypatch):
+    monkeypatch.setattr("main.SERVICE_TOKEN", "s3cret")
+    files = {k: ("x.jpg", b"x", "image/jpeg") for k in ("image", "reference", "document")}
+    assert client.post("/verify", files=files).status_code == 401
+    assert client.post("/verify", files=files, headers={"X-Service-Token": "wrong"}).status_code == 401
+
+
 def test_verify_returns_503_while_model_loads(monkeypatch):
     monkeypatch.setattr("main.is_ready", lambda: False)
     monkeypatch.setattr("main.start_warm_up", lambda: None)

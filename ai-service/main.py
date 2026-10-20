@@ -1,3 +1,4 @@
+import hmac
 import os
 import tempfile
 from contextlib import asynccontextmanager
@@ -5,7 +6,7 @@ from contextlib import asynccontextmanager
 import cv2
 from dotenv import load_dotenv
 import numpy as np
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, Header, HTTPException, UploadFile
 
 from services.document_ocr import DOCUMENT_EXTENSIONS, calculate_age, extract_date_of_birth, extract_document_text
 from services.face_verification import FaceCountError, cosine_similarity, is_ready, single_face, start_warm_up
@@ -16,6 +17,9 @@ load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
 
 FACE_MATCH_THRESHOLD = float(os.getenv("FACE_MATCH_THRESHOLD", "0.45"))
 MIN_VOTING_AGE = 18
+# When set, /verify only accepts requests carrying this value in X-Service-Token
+# (the backend sends it), so a publicly hosted AI service can't be used by others.
+SERVICE_TOKEN = os.getenv("AI_SERVICE_TOKEN", "")
 
 @asynccontextmanager
 async def lifespan(app):
@@ -79,7 +83,11 @@ def verify(
     image: UploadFile = File(...),
     reference: UploadFile = File(...),
     document: UploadFile = File(...),
+    x_service_token: str = Header(default=""),
 ):
+    if SERVICE_TOKEN and not hmac.compare_digest(x_service_token, SERVICE_TOKEN):
+        raise HTTPException(status_code=401, detail="Invalid service token")
+
     if not is_ready():
         start_warm_up()
         raise HTTPException(status_code=503, detail="The face model is still loading (first start downloads ~300 MB). Try again in a minute.")
