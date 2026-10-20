@@ -1,5 +1,6 @@
 import { ethers } from 'ethers';
 import abi from '../config/contractAbi';
+import { METAMASK_HELP } from '../components/MetaMaskNotice';
 import { CHAIN_ID, CONTRACT_ADDRESS, IS_LOCAL_CHAIN, NETWORK_NAME, RPC_URL } from '../config/config';
 
 // Must match backend/src/utils/messages.js exactly.
@@ -22,7 +23,7 @@ async function switchToExpectedNetwork() {
 }
 
 export async function connectWallet() {
-  if (!window.ethereum) throw new Error('MetaMask is not installed.');
+  if (!window.ethereum) throw new Error(METAMASK_HELP);
   let provider = new ethers.BrowserProvider(window.ethereum);
   await provider.send('eth_requestAccounts', []);
   if ((await provider.getNetwork()).chainId !== CHAIN_ID) {

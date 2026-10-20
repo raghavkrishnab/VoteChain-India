@@ -20,7 +20,7 @@ await connectDB();
 await User.findOneAndUpdate(
   { email: ADMIN_EMAIL.toLowerCase() },
   {
-    name: 'Demo Admin',
+    name: process.env.ADMIN_NAME || 'Demo Admin',
     email: ADMIN_EMAIL.toLowerCase(),
     passwordHash: await bcrypt.hash(ADMIN_PASSWORD, 12),
     role: 'admin',

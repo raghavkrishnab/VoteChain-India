@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import Logo from './Logo';
+import MetaMaskNotice from './MetaMaskNotice';
 import { NETWORK_NAME } from '../config/config';
 
 const POINTS = [
@@ -41,7 +42,8 @@ export default function AuthShell({ title, subtitle, children, footer }) {
           <Link to="/" className="lg:hidden inline-block mb-8"><Logo /></Link>
           <h2 className="text-3xl font-bold text-brand-950">{title}</h2>
           {subtitle && <p className="text-slate-600 mt-2">{subtitle}</p>}
-          <div className="mt-8">{children}</div>
+          <div className="mt-6"><MetaMaskNotice /></div>
+          <div className="mt-6">{children}</div>
           {footer && <div className="mt-8 text-center text-sm text-slate-500">{footer}</div>}
         </div>
       </main>
