@@ -1,0 +1,42 @@
+[
+  {
+    "folder": "voter-1-ananya-sharma",
+    "name": "Ananya Sharma",
+    "gender": "Female",
+    "dob": "12 MAR 1978",
+    "voterId": "VCI-DEMO-0001",
+    "email": "ananya.sharma@example.com"
+  },
+  {
+    "folder": "voter-2-priya-menon",
+    "name": "Priya Menon",
+    "gender": "Female",
+    "dob": "25 JUL 1981",
+    "voterId": "VCI-DEMO-0002",
+    "email": "priya.menon@example.com"
+  },
+  {
+    "folder": "voter-3-samuel-dsouza",
+    "name": "Samuel D'Souza",
+    "gender": "Male",
+    "dob": "03 SEP 1976",
+    "voterId": "VCI-DEMO-0003",
+    "email": "samuel.dsouza@example.com"
+  },
+  {
+    "folder": "voter-4-karan-mehta",
+    "name": "Karan Mehta",
+    "gender": "Male",
+    "dob": "09 NOV 1994",
+    "voterId": "VCI-DEMO-0004",
+    "email": "karan.mehta@example.com"
+  },
+  {
+    "folder": "voter-5-isha-kapoor",
+    "name": "Isha Kapoor",
+    "gender": "Female",
+    "dob": "14 FEB 2010",
+    "voterId": "VCI-DEMO-0005",
+    "email": "isha.kapoor@example.com"
+  }
+]

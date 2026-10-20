@@ -1,5 +1,6 @@
 import threading
 
+import cv2
 import numpy as np
 
 _app = None
@@ -47,9 +48,24 @@ def get_app():
     return _app
 
 
-def single_face(image):
-    """Detect faces once and return the only face, or raise FaceCountError."""
+def _detect(image):
     faces = get_app().get(image)
+    if faces:
+        return faces
+    # The detector misses faces that fill the whole frame (tight selfies, ID-photo
+    # crops). Retry with a plain border around the image, then map the box back.
+    h, w = image.shape[:2]
+    pad = max(h, w) // 4
+    padded = cv2.copyMakeBorder(image, pad, pad, pad, pad, cv2.BORDER_CONSTANT, value=(128, 128, 128))
+    faces = get_app().get(padded)
+    for face in faces:
+        face.bbox = np.clip(face.bbox - pad, 0, [w, h, w, h])
+    return faces
+
+
+def single_face(image):
+    """Return the only face in the image, or raise FaceCountError."""
+    faces = _detect(image)
     if len(faces) != 1:
         raise FaceCountError(len(faces))
     return faces[0]
