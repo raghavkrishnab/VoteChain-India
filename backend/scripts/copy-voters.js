@@ -8,6 +8,7 @@
 // Copied voters keep their AI verification results but start as "pending"
 // approval, because the new blockchain contract doesn't know their wallets yet.
 import 'dotenv/config';
+import dns from 'dns';
 import fs from 'fs/promises';
 import mongoose from 'mongoose';
 
@@ -21,7 +22,17 @@ if (!TARGET_URI || TARGET_URI.includes('127.0.0.1') || TARGET_URI.includes('loca
 }
 
 const source = await mongoose.createConnection(SOURCE_URI, { dbName: SOURCE_DB, serverSelectionTimeoutMS: 5000 }).asPromise();
-const target = await mongoose.createConnection(TARGET_URI, { serverSelectionTimeoutMS: 15000 }).asPromise();
+const connectTarget = () =>
+  mongoose.createConnection(TARGET_URI, { dbName: process.env.MONGODB_DB_NAME || undefined, serverSelectionTimeoutMS: 15000 }).asPromise();
+let target;
+try {
+  target = await connectTarget();
+} catch (e) {
+  // Same fallback as src/config/db.js: some networks refuse Node's SRV lookups.
+  if (e.syscall !== 'querySrv') throw e;
+  dns.setServers(['1.1.1.1', '8.8.8.8']);
+  target = await connectTarget();
+}
 const sourceFiles = new mongoose.mongo.GridFSBucket(source.db, { bucketName: 'uploads' });
 const targetFiles = new mongoose.mongo.GridFSBucket(target.db, { bucketName: 'uploads' });
 
