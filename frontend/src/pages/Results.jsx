@@ -25,10 +25,18 @@ export default function Results() {
     if (!electionId) return;
     setData(null);
     setError('');
-    api
-      .get(`/elections/${electionId}/results`)
-      .then((r) => setData(r.data))
-      .catch((e) => setError(errorMessage(e, 'Could not read results from the blockchain.')));
+    const load = () =>
+      api
+        .get(`/elections/${electionId}/results`)
+        .then((r) => {
+          setData(r.data);
+          setError('');
+        })
+        .catch((e) => setError(errorMessage(e, 'Could not read results from the blockchain.')));
+    load();
+    // Live tally while voting is open.
+    const timer = setInterval(load, 10000);
+    return () => clearInterval(timer);
   }, [electionId]);
 
   return (
@@ -36,7 +44,7 @@ export default function Results() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-3xl font-bold">Public results</h1>
-          <p className="text-sm text-slate-600 mt-1">Vote counts are read live from the smart contract.</p>
+          <p className="text-sm text-slate-600 mt-1">Vote counts are read live from the smart contract and refresh every 10 seconds.</p>
         </div>
         {elections.length > 1 && (
           <select className="border rounded-lg px-3 py-2" value={electionId} onChange={(e) => setElectionId(e.target.value)}>

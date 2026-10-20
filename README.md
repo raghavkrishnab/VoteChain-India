@@ -31,7 +31,14 @@ React (5173) ──REST──▶ Express (5000) ──▶ MongoDB Atlas
 
 ## Quick start
 
-See **[SETUP.md](SETUP.md)**.
+After the one-time setup in **[SETUP.md](SETUP.md)** (copy the `.env` files and create the AI venv):
+
+```powershell
+.\start.ps1                   # local mode: everything on this PC, no test ETH or Atlas needed
+.\start.ps1 -Network sepolia  # Sepolia testnet + MongoDB Atlas
+```
+
+Then open http://localhost:5173. `GET http://localhost:5000/api/health` reports the database, AI service and blockchain status.
 
 ## Security
 

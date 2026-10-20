@@ -3,6 +3,10 @@ import assert from 'node:assert/strict';
 import { ethers } from 'ethers';
 
 process.env.JWT_SECRET ||= 'test-secret-that-is-long-enough-123';
+// Point dependencies at closed ports so results don't depend on what's running locally.
+process.env.AI_SERVICE_URL = 'http://127.0.0.1:9';
+process.env.BLOCKCHAIN_RPC_URL = 'http://127.0.0.1:9';
+process.env.CONTRACT_ADDRESS = '0x0000000000000000000000000000000000000001';
 
 const { default: app } = await import('../src/app.js');
 const { loginMessage, registrationMessage } = await import('../src/utils/messages.js');
@@ -21,10 +25,14 @@ after(() => server.close());
 const post = (path, body) =>
   fetch(`${base}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 
-test('health endpoint responds', async () => {
+test('health endpoint reports each dependency', async () => {
   const res = await fetch(`${base}/health`);
   assert.equal(res.status, 200);
-  assert.deepEqual(await res.json(), { ok: true, service: 'backend' });
+  const body = await res.json();
+  assert.equal(body.service, 'backend');
+  // No database, AI service or chain in the test environment.
+  assert.equal(body.ok, false);
+  for (const key of ['database', 'ai', 'blockchain']) assert.equal(body[key].ok, false, key);
 });
 
 test('unknown routes return JSON 404', async () => {

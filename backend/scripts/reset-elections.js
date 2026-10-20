@@ -1,6 +1,6 @@
 // Deletes elections, candidates and vote records (users are kept) and rebuilds
 // indexes. Run after deploying a new contract, since old records cannot be used.
-import 'dotenv/config';
+import { connectDB } from '../src/config/db.js';
 import mongoose from 'mongoose';
 
 import Election from '../src/models/Election.js';
@@ -13,7 +13,7 @@ if (!process.argv.includes('--yes')) {
   process.exit(1);
 }
 
-await mongoose.connect(process.env.MONGODB_URI);
+await connectDB();
 for (const model of [Election, Candidate, VoteTransaction]) {
   const { deletedCount } = await model.deleteMany({});
   console.log(`${model.modelName}: deleted ${deletedCount}`);

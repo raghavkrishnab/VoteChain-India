@@ -1,3 +1,5 @@
+import { EXPLORER_URL } from '../config/config';
+
 export function Card({ title, children, className = '' }) {
   return (
     <section className={`bg-white border border-slate-200 rounded-2xl p-5 shadow-sm ${className}`}>
@@ -41,3 +43,13 @@ export function StatusBadge({ status }) {
 export const shortAddress = (address) => (address ? `${address.slice(0, 6)}…${address.slice(-4)}` : '—');
 
 export const inputClass = 'w-full border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:border-indigo-500';
+
+export function TxLink({ hash, short = false, className = '' }) {
+  const text = short ? shortAddress(hash) : hash;
+  if (!EXPLORER_URL) return <span className={`font-mono ${className}`} title={hash}>{text}</span>;
+  return (
+    <a className={`font-mono underline ${className}`} href={`${EXPLORER_URL}/tx/${hash}`} target="_blank" rel="noreferrer" title={hash}>
+      {text}
+    </a>
+  );
+}

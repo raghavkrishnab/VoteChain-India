@@ -5,6 +5,7 @@ import mongoose from 'mongoose';
 import multer from 'multer';
 
 import { env } from './config/env.js';
+import { systemHealth } from './services/health.js';
 import auth from './routes/auth.js';
 import voters from './routes/voters.js';
 import verification from './routes/verification.js';
@@ -18,7 +19,7 @@ app.use(helmet());
 app.use(cors({ origin: env.FRONTEND_URL }));
 app.use(express.json({ limit: '1mb' }));
 
-app.get('/api/health', (req, res) => res.json({ ok: true, service: 'backend' }));
+app.get('/api/health', async (req, res) => res.json(await systemHealth()));
 app.use('/api/auth', auth);
 app.use('/api/voters', voters);
 app.use('/api/verification', verification);

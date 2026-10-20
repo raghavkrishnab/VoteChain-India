@@ -52,7 +52,9 @@ export async function face(req, res) {
     if (status && status < 500) {
       return res.status(400).json({ message: e.response.data?.detail || 'Verification input rejected' });
     }
-    return res.status(503).json({ message: 'AI verification service is unavailable' });
+    // 503 with a detail means "face model still loading": pass that on so the user knows to retry.
+    const detail = status === 503 && e.response.data?.detail;
+    return res.status(503).json({ message: detail || 'AI verification service is unavailable' });
   }
 
   const faceVerified = result.verified === true;

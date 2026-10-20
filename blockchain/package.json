@@ -5,7 +5,10 @@
   "scripts": {
     "compile": "hardhat compile",
     "test": "hardhat test",
+    "node": "hardhat node",
     "deploy": "hardhat run scripts/deploy.js --network sepolia",
+    "deploy:local": "hardhat run scripts/deploy.js --network localhost",
+    "fund:local": "node scripts/fund-local.js",
     "sync-abi": "node scripts/sync-abi.js"
   },
   "dependencies": {

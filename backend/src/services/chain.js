@@ -21,6 +21,13 @@ function getContract() {
   return contract;
 }
 
+export async function getChainHealth() {
+  const provider = getContract().runner.provider;
+  const [code, blockNumber] = await Promise.all([provider.getCode(env.CONTRACT_ADDRESS), provider.getBlockNumber()]);
+  if (code === '0x') throw new Error(`No contract deployed at ${env.CONTRACT_ADDRESS} on chain ${env.CHAIN_ID}`);
+  return { chainId: env.CHAIN_ID, contractAddress: env.CONTRACT_ADDRESS, blockNumber };
+}
+
 export async function getElectionStatus(chainElectionId) {
   return Number(await getContract().getElectionStatus(chainElectionId));
 }

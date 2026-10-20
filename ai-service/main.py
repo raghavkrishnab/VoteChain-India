@@ -1,18 +1,30 @@
 import os
 import tempfile
+from contextlib import asynccontextmanager
 
 import cv2
+from dotenv import load_dotenv
 import numpy as np
 from fastapi import FastAPI, File, HTTPException, UploadFile
 
 from services.document_ocr import DOCUMENT_EXTENSIONS, calculate_age, extract_date_of_birth, extract_document_text
-from services.face_verification import FaceCountError, cosine_similarity, single_face
+from services.face_verification import FaceCountError, cosine_similarity, is_ready, single_face, start_warm_up
 from services.liveness import basic_liveness
+
+# Settings such as TESSERACT_CMD and FACE_MATCH_THRESHOLD can live in ai-service/.env.
+load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
 
 FACE_MATCH_THRESHOLD = float(os.getenv("FACE_MATCH_THRESHOLD", "0.45"))
 MIN_VOTING_AGE = 18
 
-app = FastAPI(title="Voting AI Service", version="1.1.0")
+@asynccontextmanager
+async def lifespan(app):
+    # Start loading the face model immediately so the first verification doesn't wait for the download.
+    start_warm_up()
+    yield
+
+
+app = FastAPI(title="Voting AI Service", version="1.2.0", lifespan=lifespan)
 
 
 @app.get("/")
@@ -22,7 +34,7 @@ def root():
 
 @app.get("/health")
 def health():
-    return {"ok": True}
+    return {"ok": True, "modelReady": is_ready()}
 
 
 def _decode(upload: UploadFile, label: str):
@@ -68,6 +80,10 @@ def verify(
     reference: UploadFile = File(...),
     document: UploadFile = File(...),
 ):
+    if not is_ready():
+        start_warm_up()
+        raise HTTPException(status_code=503, detail="The face model is still loading (first start downloads ~300 MB). Try again in a minute.")
+
     live = _decode(image, "live")
     ref = _decode(reference, "reference")
 

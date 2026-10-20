@@ -67,6 +67,7 @@ function Voters({ setMsg }) {
                 <th>Face</th>
                 <th>Age</th>
                 <th>Approval</th>
+                <th>On-chain</th>
                 <th />
               </tr>
             </thead>
@@ -83,8 +84,9 @@ function Voters({ setMsg }) {
                     <td><StatusBadge status={v.verificationStatus} /></td>
                     <td><StatusBadge status={v.eligibilityStatus} /></td>
                     <td><StatusBadge status={v.documentStatus} /></td>
+                    <td title="Wallet registered in the Voting contract">{v.onChainRegistered === null ? '?' : v.onChainRegistered ? '✅' : '—'}</td>
                     <td className="text-right whitespace-nowrap space-x-2">
-                      {v.documentStatus !== 'approved' && (
+                      {(v.documentStatus !== 'approved' || v.onChainRegistered === false) && (
                         <Button
                           variant="success"
                           className="text-xs px-3 py-1"
@@ -92,7 +94,7 @@ function Voters({ setMsg }) {
                           title={aiPassed ? '' : 'Voter must pass AI verification first'}
                           onClick={() => decide(v, 'approved')}
                         >
-                          Register & approve
+                          {v.documentStatus === 'approved' ? 'Re-register on-chain' : 'Register & approve'}
                         </Button>
                       )}
                       {v.documentStatus === 'pending' && (

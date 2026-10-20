@@ -9,11 +9,23 @@ from main import app  # noqa: E402
 client = TestClient(app)
 
 
-def test_health():
-    assert client.get("/health").json() == {"ok": True}
+def test_health_reports_model_state():
+    body = client.get("/health").json()
+    assert body["ok"] is True
+    assert isinstance(body["modelReady"], bool)
 
 
-def test_verify_rejects_invalid_image():
+def test_verify_returns_503_while_model_loads(monkeypatch):
+    monkeypatch.setattr("main.is_ready", lambda: False)
+    monkeypatch.setattr("main.start_warm_up", lambda: None)
+    files = {k: ("x.jpg", b"x", "image/jpeg") for k in ("image", "reference", "document")}
+    res = client.post("/verify", files=files)
+    assert res.status_code == 503
+    assert "loading" in res.json()["detail"]
+
+
+def test_verify_rejects_invalid_image(monkeypatch):
+    monkeypatch.setattr("main.is_ready", lambda: True)
     files = {
         "image": ("live.jpg", b"not an image", "image/jpeg"),
         "reference": ("ref.jpg", b"not an image", "image/jpeg"),

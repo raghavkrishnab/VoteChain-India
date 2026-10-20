@@ -12,7 +12,8 @@ def basic_liveness(image, face_bbox):
     anti-spoofing and will not stop a printed photo or a screen replay.
     """
     h, w = image.shape[:2]
-    x1, y1, x2, y2 = face_bbox
+    # InsightFace returns numpy floats, which can't be serialised to JSON; use plain floats.
+    x1, y1, x2, y2 = (float(v) for v in face_bbox)
     face_fraction = max(0.0, min(x2 - x1, y2 - y1)) / min(h, w)
     sharpness = float(cv2.Laplacian(cv2.cvtColor(image, cv2.COLOR_BGR2GRAY), cv2.CV_64F).var())
 

@@ -19,6 +19,8 @@ _NUMERIC_DMY = re.compile(r"\b(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})\b")
 _NUMERIC_YMD = re.compile(r"\b(\d{4})-(\d{1,2})-(\d{1,2})\b")
 # 15 AUG 2004, 15 AUGUST 2004, 15-AUG-2004
 _TEXT_MONTH = re.compile(r"\b(\d{1,2})[\s-]+(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)[A-Z]*[\s-]+(\d{4})\b")
+# January 1, 1970 / JAN 1 1970
+_MONTH_FIRST = re.compile(r"\b(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)[A-Z]*\.?\s+(\d{1,2}),?\s+(\d{4})\b")
 _DOB_LABEL = re.compile(r"\b(DOB|D\.O\.B|BIRTH|BORN)\b")
 
 
@@ -59,18 +61,24 @@ def _dates_in(line):
         yield int(y), int(m), int(d)
     for d, mon, y in _TEXT_MONTH.findall(line):
         yield int(y), MONTHS[mon], int(d)
+    for mon, d, y in _MONTH_FIRST.findall(line):
+        yield int(y), MONTHS[mon], int(d)
 
 
 def extract_date_of_birth(text, today=None):
     """Return the most likely date of birth in ISO format, or None.
 
-    A date on a line labelled DOB/Birth wins. Otherwise the earliest valid
-    past date is used, since issue and expiry dates on an ID are later.
+    A date on (or directly below) a line labelled DOB/Birth wins. Otherwise
+    the earliest valid past date is used, since issue and expiry dates on an
+    ID are later.
     """
     today = today or date.today()
     labelled, others = [], []
-    for line in (text or "").upper().splitlines():
-        bucket = labelled if _DOB_LABEL.search(line) else others
+    lines = [line for line in (text or "").upper().splitlines() if line.strip()]
+    for i, line in enumerate(lines):
+        # IDs often print the label on its own line with the date below it.
+        label_above = i > 0 and _DOB_LABEL.search(lines[i - 1]) and not any(_dates_in(lines[i - 1]))
+        bucket = labelled if _DOB_LABEL.search(line) or label_above else others
         for y, m, d in _dates_in(line):
             try:
                 candidate = date(y, m, d)

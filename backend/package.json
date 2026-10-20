@@ -7,7 +7,11 @@
     "start": "node src/server.js",
     "test": "node --test",
     "seed:admin": "node scripts/create-admin.js",
-    "reset:elections": "node scripts/reset-elections.js"
+    "reset:elections": "node scripts/reset-elections.js",
+    "dev:local": "node --env-file-if-exists=.env.localchain --watch src/server.js",
+    "seed:admin:local": "node --env-file-if-exists=.env.localchain scripts/create-admin.js",
+    "reset:elections:local": "node --env-file-if-exists=.env.localchain scripts/reset-elections.js --yes",
+    "db:local": "node scripts/local-db.js"
   },
   "dependencies": {
     "axios": "^1.11.0",
@@ -22,5 +26,8 @@
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.18.0",
     "multer": "^2.0.2"
+  },
+  "devDependencies": {
+    "mongodb-memory-server": "^11.3.0"
   }
 }

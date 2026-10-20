@@ -16,7 +16,11 @@ export async function record(req, res) {
   if (!election) return res.status(404).json({ message: 'Election not found' });
 
   const existing = await VoteTransaction.findOne({ transactionHash: transactionHash.toLowerCase() });
-  if (existing) return res.json({ transaction: existing });
+  if (existing) {
+    // Retrying your own vote is fine; someone else's transaction is not yours to claim or view.
+    if (existing.walletAddress !== req.user.walletAddress) return res.status(403).json({ message: 'Transaction belongs to another voter' });
+    return res.json({ transaction: existing });
+  }
 
   const { candidateIdentifier, blockNumber } = await verifyVoteTransaction(transactionHash, {
     voter: req.user.walletAddress,

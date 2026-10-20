@@ -12,6 +12,29 @@ class FaceCountError(ValueError):
         self.count = count
 
 
+def is_ready():
+    return _app is not None
+
+
+_loader = None
+
+
+def _load():
+    try:
+        get_app()
+    except Exception as e:  # keep the service up; the next request starts a new attempt
+        print(f"Face model failed to load: {e}")
+
+
+def start_warm_up():
+    """Load the model in the background (the first run downloads ~300 MB). No-op if already loading."""
+    global _loader
+    with _lock:
+        if _app is None and (_loader is None or not _loader.is_alive()):
+            _loader = threading.Thread(target=_load, daemon=True)
+            _loader.start()
+
+
 def get_app():
     # Loaded on first use: the model is large and FastAPI handles requests in a threadpool.
     global _app

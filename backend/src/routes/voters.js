@@ -8,7 +8,11 @@ const r = Router();
 
 r.get('/', auth, adminOnly, async (req, res) => {
   const voters = await User.find({ role: 'voter' }).sort({ createdAt: -1 });
-  res.json({ voters: voters.map((v) => v.toSafeJSON()) });
+  // null when the chain can't be reached, so the list still loads.
+  const onChain = await Promise.all(
+    voters.map((v) => (v.walletAddress ? isRegisteredVoter(v.walletAddress).catch(() => null) : false))
+  );
+  res.json({ voters: voters.map((v, i) => ({ ...v.toSafeJSON(), onChainRegistered: onChain[i] })) });
 });
 
 // Admin decision on a voter. Only documentStatus can be changed here; approval

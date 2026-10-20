@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import { connectDB } from '../src/config/db.js';
 import bcrypt from 'bcrypt';
 import mongoose from 'mongoose';
 import { ethers } from 'ethers';
@@ -16,7 +16,7 @@ if (!ethers.isAddress(ADMIN_WALLET_ADDRESS)) {
   process.exit(1);
 }
 
-await mongoose.connect(MONGODB_URI);
+await connectDB();
 await User.findOneAndUpdate(
   { email: ADMIN_EMAIL.toLowerCase() },
   {

@@ -26,6 +26,21 @@ def test_invalid_and_missing_dates():
     assert extract_date_of_birth("", TODAY) is None
 
 
+def test_label_on_line_above_date():
+    text = "ID #: 8008135\nDATE OF BIRTH:\n15 DEC 1999\nEXPIRY DATE: 01/01/2030"
+    assert extract_date_of_birth(text, TODAY) == "1999-12-15"
+
+
+def test_month_first_format():
+    assert extract_date_of_birth("Date of Birth : January 1, 1970", TODAY) == "1970-01-01"
+    assert extract_date_of_birth("DOB AUG 15 2004", TODAY) == "2004-08-15"
+
+
+def test_impossible_or_garbled_dates_are_rejected():
+    assert extract_date_of_birth("DATE OF BIRTH:\n32 DEC 1999", TODAY) is None
+    assert extract_date_of_birth("Date of Birth : January 1, 197@", TODAY) is None
+
+
 def test_calculate_age_respects_birthday():
     assert calculate_age("2008-10-20", TODAY) == 18
     assert calculate_age("2008-10-21", TODAY) == 17

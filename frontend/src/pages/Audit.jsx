@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
 
 import api, { errorMessage } from '../services/api';
-import { EXPLORER_URL } from '../config/config';
-import { Alert, shortAddress } from '../components/ui';
+import { Alert, TxLink, shortAddress } from '../components/ui';
 
 export default function Audit() {
   const [entries, setEntries] = useState([]);
@@ -17,7 +16,7 @@ export default function Audit() {
       <div>
         <h1 className="text-3xl font-bold">Audit trail</h1>
         <p className="text-sm text-slate-600 mt-1">
-          Every vote below was verified against its on-chain transaction receipt before being recorded. Follow a link to check it independently.
+          Every vote below was verified against its on-chain transaction receipt before being recorded. Each transaction can be checked independently on the blockchain.
         </p>
       </div>
       <Alert kind="error">{error}</Alert>
@@ -40,11 +39,7 @@ export default function Audit() {
                   <td className="p-3">{x.electionId?.title || '—'}</td>
                   <td className="p-3 font-mono" title={x.walletAddress}>{shortAddress(x.walletAddress)}</td>
                   <td className="p-3">{x.blockNumber}</td>
-                  <td className="p-3 font-mono">
-                    <a className="text-indigo-600 underline" href={`${EXPLORER_URL}/tx/${x.transactionHash}`} target="_blank" rel="noreferrer">
-                      {shortAddress(x.transactionHash)}
-                    </a>
-                  </td>
+                  <td className="p-3"><TxLink hash={x.transactionHash} short className="text-indigo-600" /></td>
                   <td className="p-3">{new Date(x.createdAt).toLocaleString()}</td>
                 </tr>
               ))}

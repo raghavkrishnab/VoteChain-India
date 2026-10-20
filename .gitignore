@@ -1,6 +1,9 @@
 **/node_modules/
 **/.env
+**/.env.*
+!**/.env.example
 **/venv/
+**/venv-*/
 **/dist/
 **/__pycache__/
 **/.pytest_cache/
@@ -9,3 +12,4 @@
 **/uploads/
 *.pyc
 *.zip
+**/.localdb/

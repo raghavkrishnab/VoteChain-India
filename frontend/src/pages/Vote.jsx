@@ -3,8 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import api, { errorMessage } from '../services/api';
 import { castVoteOnChain } from '../services/blockchain';
 import { useAuth } from '../context/AuthContext';
-import { EXPLORER_URL } from '../config/config';
-import { Alert, Button, Card } from '../components/ui';
+import { Alert, Button, Card, TxLink } from '../components/ui';
 
 export default function Vote() {
   const { user } = useAuth();
@@ -105,9 +104,7 @@ export default function Vote() {
       {recorded ? (
         <Alert kind="success">
           You have voted in <b>{election.title}</b>. Transaction{' '}
-          <a className="underline break-all" href={`${EXPLORER_URL}/tx/${recorded.transactionHash}`} target="_blank" rel="noreferrer">
-            {recorded.transactionHash}
-          </a>{' '}
+          <TxLink hash={recorded.transactionHash} className="break-all" />{' '}
           (block {recorded.blockNumber}).
         </Alert>
       ) : (
