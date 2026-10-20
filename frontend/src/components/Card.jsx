@@ -1,0 +1,1 @@
+export default function Card({title,children}){return <section className="bg-white border rounded-2xl p-5 shadow-sm"><h2 className="font-semibold mb-3">{title}</h2>{children}</section>}

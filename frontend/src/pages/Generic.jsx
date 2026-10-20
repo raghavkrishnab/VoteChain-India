@@ -1,0 +1,1 @@
+export default function Generic({title}){return <div><h1 className="text-3xl font-bold">{title}</h1><p className="mt-3 text-slate-600">This prototype view is available through the main workflow and uses the shared API/blockchain services.</p></div>}
